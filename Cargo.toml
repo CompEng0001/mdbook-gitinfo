@@ -1,0 +1,18 @@
+[package]
+name = "mdbook-gitinfo"
+version = "0.1.0"
+edition = "2024"
+authors = ["Seb Blair <s.blair@gre.ac.uk>"]
+description = "An mdBook preprocessor to inject Git commit metadata into generated books"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/CompEng0001/mdbook-gitinfo"
+readme = "README.md"
+keywords = ["mdbook", "git", "preprocessor", "documentation"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+chrono = "0.4.41"
+clap = "4.5.40"
+mdbook = { version = "0.4.51"}
+serde = { version = "1", features = ["derive"] }
+serde_json = "1.0.140"

@@ -1,0 +1,43 @@
+name: Release mdbook-gitinfo
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add musl target
+        run: rustup target add x86_64-unknown-linux-musl
+
+      - name: Build statically linked binary (musl)
+        run: cargo build --release --target x86_64-unknown-linux-musl
+
+      - name: Prepare dist
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp target/x86_64-unknown-linux-musl/release/mdbook-gitinfo dist/mdbook-gitinfo-linux
+          cd dist
+          tar -czf mdbook-gitinfo-linux.tar.gz mdbook-gitinfo-linux
+          sha256sum mdbook-gitinfo-linux > mdbook-gitinfo-linux_sha256sum.txt
+          sha256sum mdbook-gitinfo-linux.tar.gz > mdbook-gitinfo-linux.tar.gz_sha256sum.txt
+
+      - name: Upload release artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/mdbook-gitinfo-linux
+            dist/mdbook-gitinfo-linux.tar.gz
+            dist/mdbook-gitinfo-linux_sha256sum.txt
+            dist/mdbook-gitinfo-linux.tar.gz_sha256sum.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.MDBOOK_GITINFO_TOKEN }}
