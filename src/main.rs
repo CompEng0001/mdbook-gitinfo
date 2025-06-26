@@ -3,15 +3,16 @@
 //! This preprocessor extracts the latest commit hash, tag, and timestamp from the repository
 //! and renders it into each chapter, typically for provenance or change-tracking purposes.
 
-mod git;
 mod config;
+mod git;
 
 use crate::config::load_config;
 use chrono::{DateTime, Local};
-use clap::{arg, command, ArgMatches, Command};
+use clap::{ArgMatches, Command, arg, command};
 use mdbook::book::{Book, BookItem};
 use mdbook::errors::Error;
 use mdbook::preprocess::{CmdPreprocessor, Preprocessor, PreprocessorContext};
+use std::path::PathBuf;
 use std::{io, process};
 
 /// The `GitInfo` struct implements the `Preprocessor` trait for injecting Git metadata.
@@ -33,64 +34,96 @@ impl Preprocessor for GitInfo {
     }
 
     /// Injects rendered Git metadata into each chapter of the book.
-    ///
-    /// Metadata is extracted using Git commands, and rendered based on a user-specified or
-    /// default template. The result is inserted at the bottom of each chapter wrapped in a styled `<footer>`.
     fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book, Error> {
         let cfg = load_config(ctx)?;
 
         // Git metadata extraction
-        let hash = git::get_git_output(["rev-parse", "--short", "HEAD"], &ctx.root)?;
-        let long_hash = git::get_git_output(["rev-parse", "HEAD"], &ctx.root)?;
-        let tag = git::get_git_output(["describe", "--tags", "--always"], &ctx.root)?;
-        let raw_date = git::get_git_output(
-            ["log", "-1", "--format=%cd", "--date=iso-strict"],
-            &ctx.root,
-        )?;
-
-        // Configurable rendering options
-        let template = cfg.template.unwrap_or_else(|| "{{date}}{{sep}}commit: {{hash}}".to_string());
+        let template = cfg
+            .template
+            .unwrap_or_else(|| "{{date}}{{sep}}commit: {{hash}}".to_string());
         let font_size = cfg.font_size.unwrap_or_else(|| "0.8em".to_string());
         let separator = cfg.separator.unwrap_or_else(|| " • ".to_string());
         let date_format = cfg.date_format.unwrap_or_else(|| "%Y-%m-%d".to_string());
         let time_format = cfg.time_format.unwrap_or_else(|| "%H:%M:%S".to_string());
 
-        // Attempt to parse and format the commit timestamp
-        let formatted_date = match DateTime::parse_from_rfc3339(&raw_date) {
-            Ok(dt) => format!(
-                "{} {}",
-                dt.with_timezone(&Local).format(&date_format),
-                dt.with_timezone(&Local).format(&time_format)
-            ),
-            Err(_) => raw_date.clone(),
-        };
+        let content_dir = ctx.config.book.src.clone();
 
-        // Render the template
-        let rendered = template
-            .replace("{{hash}}", &hash)
-            .replace("{{long}}", &long_hash)
-            .replace("{{tag}}", &tag)
-            .replace("{{date}}", &formatted_date)
-            .replace("{{sep}}", &separator);
+        book.for_each_mut(|item| {
+            decorate_chapters(item, &|ch| {
+                if let Some(path) = &ch.path {
+                    // Get relative path Git log
+                    let full_path = PathBuf::from(&content_dir).join(path);
+                    let path_str = full_path.to_string_lossy().replace('\\', "/");
 
-        // Inline style for visibility control
-        let style = format!(
-            "font-size:{};padding:4px;margin:0.5em 0;text-align:right;display:block;",
-            font_size
-        );
+                    // Configurable rendering options
+                    let short_hash = git::get_git_output(
+                        ["log", "-1", "--format=%h", "--", &path_str],
+                        &ctx.root,
+                    )
+                    .unwrap_or_default();
+                    let long_hash = git::get_git_output(
+                        ["log", "-1", "--format=%H", "--", &path_str],
+                        &ctx.root,
+                    )
+                    .unwrap_or_default();
+                    let tag = git::get_git_output(
+                        ["describe", "--tags", "--always", "--", &path_str],
+                        &ctx.root,
+                    )
+                    .unwrap_or_default();
+                    let raw_date = git::get_git_output(
+                        [
+                            "log",
+                            "-1",
+                            "--format=%cd",
+                            "--date=iso-strict",
+                            "--",
+                            &path_str,
+                        ],
+                        &ctx.root,
+                    )
+                    .unwrap_or_else(|_| "unknown".to_string());
 
-        let decorated = format!(
-            "<footer><span class=\"gitinfo-footer\" style=\"{}\">{}</span></footer>",
-            style, rendered
-        );
+                    // Attempt to parse and format the commit timestamp
+                    let formatted_date = DateTime::parse_from_rfc3339(&raw_date)
+                        .map(|dt| {
+                            format!(
+                                "{} {}",
+                                dt.with_timezone(&Local).format(&date_format),
+                                dt.with_timezone(&Local).format(&time_format)
+                            )
+                        })
+                        .unwrap_or_else(|_| "unknown".to_string());
 
-        // Inject footer into all chapters
-        for section in &mut book.sections {
-            if let BookItem::Chapter(ch) = section {
-                ch.content.push_str("\n");
-                ch.content.push_str(&decorated);
-            }
-        }
+                    // Render the template
+                    let rendered = render_template(
+                        &template,
+                        &short_hash,
+                        &long_hash,
+                        &tag,
+                        &formatted_date,
+                        &separator,
+                    );
+
+                    // Inline style for visibility control
+                    let style = format!(
+                        "font-size:{};padding:4px;margin:0.5em 0;text-align:right;display:block;",
+                        font_size
+                    );
+
+                    let decorated = format!(
+                        "<footer><span class=\"gitinfo-footer\" style=\"{}\">{}</span></footer>",
+                        style, rendered
+                    );
+
+                    // Inject footer into all chapters/subchapters etc
+                    if !ch.content.contains(&decorated) {
+                        ch.content.push_str("\n");
+                        ch.content.push_str(&decorated);
+                    }
+                }
+            });
+        });
 
         Ok(book)
     }
@@ -107,8 +140,7 @@ fn handle_preprocessing(pre: &dyn Preprocessor) -> Result<(), Error> {
 
     if ctx.mdbook_version != mdbook::MDBOOK_VERSION {
         eprintln!(
-            "Warning: The '{}' plugin was built against version {} of mdbook, \
-             but we're being called from version {}",
+            "Warning: The '{}' plugin was built against version {} of mdbook, but we're being called from version {}",
             pre.name(),
             mdbook::MDBOOK_VERSION,
             ctx.mdbook_version
@@ -173,6 +205,18 @@ pub fn render_template(
         .replace("{{tag}}", tag)
         .replace("{{date}}", date)
         .replace("{{sep}}", sep)
+}
+
+fn decorate_chapters<F>(item: &mut BookItem, decorate: &F)
+where
+    F: Fn(&mut mdbook::book::Chapter),
+{
+    if let BookItem::Chapter(ch) = item {
+        decorate(ch);
+        for sub in &mut ch.sub_items {
+            decorate_chapters(sub, decorate);
+        }
+    }
 }
 
 #[cfg(test)]

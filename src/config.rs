@@ -66,8 +66,8 @@ pub fn load_config(ctx: &PreprocessorContext) -> Result<GitInfoConfig, Error> {
 mod tests {
     use super::*;
     use mdbook::Config;
-    use toml::Value;
     use std::collections::BTreeMap;
+    use toml::Value;
 
     fn make_context_with_toml(toml: &str) -> PreprocessorContext {
         let parsed: toml::Value = toml::from_str(toml).unwrap();

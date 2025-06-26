@@ -24,7 +24,7 @@ An [mdBook](https://github.com/rust-lang/mdBook) preprocessor that injects Git m
 
 ## Features
 
-- Injects the latest Git commit information into each chapter.
+- Injects the latest Git commit information for each/per chapter/subchapter.
 - Fully configurable output format using template variables.
 - Supports date and time formatting.
 - Renders a styled footer below each chapter with Git metadata.
