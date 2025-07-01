@@ -107,7 +107,7 @@ With the above configuration, this footer will be injected:
 
 ```html
 <footer>
-  <span class="gitinfo-shield" style="font-size:0.8em;...">
+  <span class="gitinfo-footer" style="font-size:0.8em;...">
     Date: 2025-06-23 16:19:28 • commit: 2160ec5
   </span>
 </footer>
