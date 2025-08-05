@@ -39,6 +39,10 @@ pub struct GitInfoConfig {
     /// Default: `"%H:%M:%S"`.
     #[serde(rename = "time-format")]
     pub time_format: Option<String>,
+
+    /// Set the branch from where to get the commit history from
+    /// Default: "main"
+    pub branch: Option<String>,
 }
 
 /// Load and deserialize the `[preprocessor.gitinfo]` table from `book.toml`.

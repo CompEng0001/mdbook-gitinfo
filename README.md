@@ -53,11 +53,25 @@ Add the following to your book.toml:
 ```toml
 [preprocessor.gitinfo]
 enable = true
-template = "Date: {{date}}{{sep}}commit: {{hash}}"
+template = "Date: {{date}}{{sep}}branch: {{branch}}{{sep}}commit: {{hash}}"
 separator = " • "
 font-size = "0.8em"
 date-format = "%Y-%m-%d"
 time-format = "%H:%M:%S"
+branch = "main" # default is main, therefore optional
+```
+
+
+### Example Output
+
+With the above configuration, this footer will be injected:
+
+```html
+<footer>
+  <span class="gitinfo-footer" style="font-size:0.8em;...">
+    Date: 2025-06-23 16:19:28 • branch: main • commit: 2160ec5
+  </span>
+</footer>
 ```
 
 > [!NOTE]
@@ -101,16 +115,22 @@ You can use the following placeholders in the template string:
 
 - `{{sep}}`: Separator (defaults to " • ")
 
-## Example Output
+## .github/workflow/...
 
-With the above configuration, this footer will be injected:
+In order for mdbook-gitinfo to reference the correct commit whilst using `actions/checkout@v4`, set `fetch-depth` as `0`:
 
-```html
-<footer>
-  <span class="gitinfo-footer" style="font-size:0.8em;...">
-    Date: 2025-06-23 16:19:28 • commit: 2160ec5
-  </span>
-</footer>
+```yml
+...
+jobs:
+  deploy:
+    runs-on: ubuntu-22.04
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+...
 ```
 
 ## Compatibility

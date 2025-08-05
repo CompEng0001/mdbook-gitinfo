@@ -18,7 +18,7 @@ use std::{io, process};
 /// The `GitInfo` struct implements the `Preprocessor` trait for injecting Git metadata.
 ///
 /// It reads settings from `[preprocessor.gitinfo]` in `book.toml`, including optional fields like
-/// `template`, `font-size`, `separator`, `date-format`, and `time-format`.
+/// `template`, `font-size`, `separator`, `date-format`, `time-format` and `branch`.
 pub struct GitInfo;
 
 impl GitInfo {
@@ -45,6 +45,13 @@ impl Preprocessor for GitInfo {
         let separator = cfg.separator.unwrap_or_else(|| " • ".to_string());
         let date_format = cfg.date_format.unwrap_or_else(|| "%Y-%m-%d".to_string());
         let time_format = cfg.time_format.unwrap_or_else(|| "%H:%M:%S".to_string());
+        let mut branch = cfg.branch.unwrap_or_else(|| "main".to_string());
+
+        // Verify the branch exists
+        if !git::verify_branch(&branch, &ctx.root) {
+            eprintln!("Warning: Branch '{}' not found, falling back to 'main'", branch);
+            branch = "main".to_string();
+        }
 
         let content_dir = ctx.config.book.src.clone();
 
@@ -57,12 +64,12 @@ impl Preprocessor for GitInfo {
 
                     // Configurable rendering options
                     let short_hash = git::get_git_output(
-                        ["log", "-1", "--format=%h", "--", &path_str],
+                        ["log", "-1", "--format=%h", &format!("{branch}"), "--", &path_str],
                         &ctx.root,
                     )
                     .unwrap_or_default();
                     let long_hash = git::get_git_output(
-                        ["log", "-1", "--format=%H", "--", &path_str],
+                        ["log", "-1", "--format=%H", &format!("{branch}"), "--", &path_str],
                         &ctx.root,
                     )
                     .unwrap_or_default();
@@ -103,6 +110,7 @@ impl Preprocessor for GitInfo {
                         &tag,
                         &formatted_date,
                         &separator,
+                        &branch,
                     );
 
                     // Inline style for visibility control
@@ -198,6 +206,7 @@ pub fn render_template(
     tag: &str,
     date: &str,
     sep: &str,
+    branch: &str,
 ) -> String {
     template
         .replace("{{hash}}", hash)
@@ -205,6 +214,7 @@ pub fn render_template(
         .replace("{{tag}}", tag)
         .replace("{{date}}", date)
         .replace("{{sep}}", sep)
+        .replace("{{branch}}", branch)
 }
 
 fn decorate_chapters<F>(item: &mut BookItem, decorate: &F)

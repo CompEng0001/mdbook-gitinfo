@@ -62,6 +62,29 @@ where
     }
 }
 
+/// Verify the branch exists
+/// 
+/// # Arguments
+/// * `branch`: &str representing the branches name
+/// * `dir` - The path to the Git repository root or working directory to execute from.
+/// 
+/// # Returns
+/// * bool: true or false with respect to whether a branch exists locally or not.
+///
+/// # Example
+///
+/// ```no_run
+/// use std::path::Path;
+/// use mdbook_gitinfo::git::verify_branch;
+///
+/// if !git::verify_branch(&branch, &ctx.root) {
+///     eprintln!("Warning: Branch '{}' not found, falling back to 'main'", branch);
+///     branch = "main".to_string();
+/// }
+pub fn verify_branch(branch: &str, dir: &Path) -> bool {
+    get_git_output(["rev-parse", "--verify", branch], dir).is_ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
