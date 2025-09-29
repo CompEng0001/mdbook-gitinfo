@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*"
+permissions:
+  contents: write  # <-- REQUIRED for releases
 
 jobs:
   build:
@@ -40,4 +42,4 @@ jobs:
             dist/mdbook-gitinfo-linux_sha256sum.txt
             dist/mdbook-gitinfo-linux.tar.gz_sha256sum.txt
         env:
-          GITHUB_TOKEN: ${{ secrets.MDBOOK_GITINFO_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN  }}

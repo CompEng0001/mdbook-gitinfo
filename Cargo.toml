@@ -1,6 +1,6 @@
 [package]
 name = "mdbook-gitinfo"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 authors = ["Seb Blair <s.blair@gre.ac.uk>"]
 description = "An mdBook preprocessor to inject Git commit metadata into generated books"
@@ -11,8 +11,12 @@ keywords = ["mdbook", "git", "preprocessor", "documentation"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-chrono = "0.4.41"
-clap = "4.5.40"
-mdbook = { version = "0.4.51"}
-serde = { version = "1", features = ["derive"] }
-serde_json = "1.0.140"
+chrono = "0.4.42"
+clap = "4.5.48"
+mdbook = { version = "0.4.52"}
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

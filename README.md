@@ -61,7 +61,6 @@ time-format = "%H:%M:%S"
 branch = "main" # default is main, therefore optional
 ```
 
-
 ### Example Output
 
 With the above configuration, this footer will be injected:
@@ -76,30 +75,18 @@ With the above configuration, this footer will be injected:
 
 > [!NOTE]
 > date and time formatting use chrono format specifiers
-> | Format | Meaning                      | Example  |
-> | ------ | ---------------------------- | -------- |
-> | `%Y`   | Year with century            | `2025`   |
-> | `%y`   | Year without century (00-99) | `25`     |
-> | `%m`   | Month number (01-12)         | `06`     |
-> | `%b`   | Abbreviated month name       | `Jun`    |
-> | `%B`   | Full month name              | `June`   |
-> | `%d`   | Day of month (01-31)         | `24`     |
-> | `%e`   | Day of month, space-padded   | `24`     |
-> | `%a`   | Abbreviated weekday          | `Mon`    |
-> | `%A`   | Full weekday name            | `Monday` |
-> | `%j`   | Day of year (001–366)        | `176`    |
->
-> | Format | Meaning                        | Example  |
-> | ------ | ------------------------------ | -------- |
-> | `%H`   | Hour (00-23)                   | `14`     |
-> | `%I`   | Hour (01-12)                   | `02`     |
-> | `%p`   | AM/PM                          | `PM`     |
-> | `%M`   | Minute (00-59)                 | `05`     |
-> | `%S`   | Second (00-60, leap-sec aware) | `09`     |
-> | `%f`   | Microseconds (000000-999999)   | `123456` |
-> | `%z`   | +hhmm timezone offset          | `+0100`  |
-> | `%:z`  | +hh\:mm timezone offset        | `+01:00` |
-> | `%Z`   | Time zone name                 | `BST`    |
+> | Format | Meaning                      | Example  | |Format  | Meaning                        | Example  |
+> | ------ | ---------------------------- | -------- |-| ------ | ------------------------------ | -------- |
+> | `%Y`   | Year with century            | `2025`   | | `%H`   | Hour (00-23)                   | `14`     |
+> | `%y`   | Year without century (00-99) | `25`     | | `%I`   | Hour (01-12)                   | `02`     |
+> | `%m`   | Month number (01-12)         | `06`     | | `%p`   | AM/PM                          | `PM`     |
+> | `%b`   | Abbreviated month name       | `Jun`    | | `%M`   | Minute (00-59)                 | `05`     |
+> | `%B`   | Full month name              | `June`   | | `%S`   | Second (00-60, leap-sec aware) | `09`     |
+> | `%d`   | Day of month (01-31)         | `24`     | | `%f`   | Microseconds (000000-999999)   | `123456` |
+> | `%e`   | Day of month, space-padded   | `24`     | | `%z`   | +hhmm timezone offset          | `+0100`  |
+> | `%a`   | Abbreviated weekday          | `Mon`    | | `%:z`  | +hh\:mm timezone offset        | `+01:00` |
+> | `%A`   | Full weekday name            | `Monday` | | `%Z`   | Time zone name                 | `BST`    |
+> | `%j`   | Day of year (001–366)        | `176`    | ||||
 
 
 ## Template Variables
