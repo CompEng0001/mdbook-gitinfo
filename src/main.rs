@@ -3,10 +3,9 @@
 //! This preprocessor extracts the latest commit hash, tag, and timestamp from the repository
 //! and renders it into each chapter, typically for provenance or change-tracking purposes.
 
-mod config;
-mod git;
+use mdbook_gitinfo::config::load_config;
+use mdbook_gitinfo::git;
 
-use crate::config::load_config;
 use chrono::{DateTime, Local};
 use clap::{ArgMatches, Command, arg, command};
 use mdbook::book::{Book, BookItem};
