@@ -1,8 +1,21 @@
 //! Configuration module for the `mdbook-gitinfo` preprocessor.
 //!
-//! This module provides the [`GitInfoConfig`] struct, which represents user-defined options
-//! from the `[preprocessor.gitinfo]` table in `book.toml`, and a function to load this configuration
-//! from the `mdbook` context.
+//! This module defines [`GitInfoConfig`], the structure that holds all
+//! user-defined configuration options from the `[preprocessor.gitinfo]`
+//! section in `book.toml`. It also provides [`load_config`] to deserialize
+//! these values into the struct for use by the preprocessor.
+//!
+//! # Example `book.toml`
+//!
+//! ```toml
+//! [preprocessor.gitinfo]
+//! template   = "Date: {{date}} • Commit: {{hash}}"
+//! font-size  = "0.8em"
+//! separator  = " | "
+//! date-format = "%Y-%m-%d"
+//! time-format = "%H:%M:%S"
+//! branch      = "main"
+//! ```
 
 use mdbook::errors::Error;
 use mdbook::preprocess::PreprocessorContext;
@@ -11,37 +24,52 @@ use serde::Deserialize;
 /// Represents the user-defined configuration options under `[preprocessor.gitinfo]`
 /// in `book.toml`.
 ///
-/// Each field is optional and has a default fallback within the main logic of the preprocessor.
+/// Each field is optional; defaults are handled in the preprocessor logic.
+/// The configuration allows users to control how commit metadata is formatted
+/// and rendered in the generated book.
 #[derive(Debug, Deserialize)]
 pub struct GitInfoConfig {
-    /// The formatting style of the git data (not currently used in logic).
+    /// The formatting style of the git data (currently unused, reserved for future use).
     pub format: Option<String>,
 
-    /// Template string allowing users to define how git metadata is rendered.
-    /// Supported placeholders: `{{hash}}`, `{{long}}`, `{{tag}}`, `{{date}}`, `{{sep}}`.
+    /// Template string defining how git metadata is rendered.
+    ///
+    /// Supported placeholders:
+    /// - `{{hash}}` → short commit hash
+    /// - `{{long}}` → full commit hash
+    /// - `{{tag}}` → nearest tag
+    /// - `{{date}}` → commit date
+    /// - `{{sep}}` → separator string
     pub template: Option<String>,
 
-    /// Font size for the rendered git information footer.
+    /// CSS font size for the rendered footer text.
+    ///
     /// Default: `"0.8em"`.
     #[serde(rename = "font-size")]
     pub font_size: Option<String>,
 
-    /// Separator string inserted between elements (e.g., between date and hash).
+    /// String separator inserted between elements (e.g., date and hash).
+    ///
     /// Default: `" • "`.
     pub separator: Option<String>,
 
-    /// Format string for the date component using `chrono` formatting syntax.
+    /// Format string for the date component.
+    ///
+    /// Uses the [`chrono`] crate formatting syntax.
     /// Default: `"%Y-%m-%d"`.
     #[serde(rename = "date-format")]
     pub date_format: Option<String>,
 
-    /// Format string for the time component using `chrono` formatting syntax.
+    /// Format string for the time component.
+    ///
+    /// Uses the [`chrono`] crate formatting syntax.
     /// Default: `"%H:%M:%S"`.
     #[serde(rename = "time-format")]
     pub time_format: Option<String>,
 
-    /// Set the branch from where to get the commit history from
-    /// Default: "main"
+    /// Git branch from which to retrieve commit history.
+    ///
+    /// Default: `"main"`.
     pub branch: Option<String>,
 }
 
@@ -49,16 +77,26 @@ pub struct GitInfoConfig {
 ///
 /// # Arguments
 ///
-/// * `ctx` - The `PreprocessorContext` provided by `mdbook`, containing global configuration.
+/// * `ctx` — The [`PreprocessorContext`] provided by `mdbook`, containing
+///   the configuration tree.
 ///
 /// # Errors
 ///
 /// Returns an [`Error`] if the section is missing or cannot be parsed.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```no_run
-/// let cfg = load_config(&ctx)?;
+/// use mdbook::preprocess::PreprocessorContext;
+/// use mdbook_gitinfo::config::load_config;
+///
+/// # fn example(ctx: &PreprocessorContext) -> Result<(), mdbook::errors::Error> {
+/// let cfg = load_config(ctx)?;
+/// if let Some(template) = cfg.template {
+///     println!("Using template: {}", template);
+/// }
+/// # Ok(())
+/// # }
 /// ```
 pub fn load_config(ctx: &PreprocessorContext) -> Result<GitInfoConfig, Error> {
     ctx.config
@@ -66,6 +104,7 @@ pub fn load_config(ctx: &PreprocessorContext) -> Result<GitInfoConfig, Error> {
         .and_then(|t| t.clone().try_into().ok())
         .ok_or_else(|| Error::msg("Missing or invalid [preprocessor.gitinfo] config"))
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

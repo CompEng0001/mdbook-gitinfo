@@ -1,38 +1,52 @@
 //! Utility module for running Git commands.
 //!
-//! This module defines a helper function to invoke Git from a given directory
-//! and capture trimmed output, returning a well-formed `mdbook::Error` on failure.
+//! This module provides helpers for interacting with a Git repository,
+//! primarily to extract metadata (commit hash, tag, timestamp, branch).
+//!
+//! All functions return [`mdbook::errors::Error`] on failure so they can be
+//! integrated directly into the `mdbook` preprocessor error flow.
+//!
+//! See also:
+//! - [`get_git_output`] — Run arbitrary Git commands and capture output.
+//! - [`verify_branch`] — Convenience wrapper to check branch existence.
 
 use mdbook::errors::Error;
 use std::ffi::OsStr;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-/// Run a Git command and return the trimmed `stdout` output as a `String`.
+/// Run a Git command and return the trimmed `stdout` output as a [`String`].
 ///
-/// This function is used by the preprocessor to extract Git metadata such as commit hashes,
-/// tags, and commit timestamps.
+/// This is the central utility for invoking Git. It is used by the
+/// `mdbook-gitinfo` preprocessor to fetch commit information such as:
+/// - short or long commit hash
+/// - nearest tag
+/// - commit date/time
+///
+/// See also: [`verify_branch`], which builds on this function to check
+/// if a branch exists locally.
 ///
 /// # Type Parameters
 ///
-/// - `I`: An iterator over arguments implementing `AsRef<OsStr>`, typically a string slice array.
-/// - `S`: An individual item type in the iterator, convertible to `OsStr`.
+/// - `I`: An iterator of arguments (e.g., a string slice array).
+/// - `S`: Each argument, convertible to [`OsStr`].
 ///
 /// # Arguments
 ///
-/// * `args` - An iterator of Git command-line arguments (e.g., `["rev-parse", "HEAD"]`).
-/// * `dir` - The path to the Git repository root or working directory to execute from.
+/// * `args` — Git command-line arguments (e.g., `["rev-parse", "HEAD"]`).
+/// * `dir` — Path to the Git repository root or working directory.
 ///
 /// # Returns
 ///
-/// * `Ok(String)` containing the trimmed stdout of the Git command.
-/// * `Err(Error)` if the command fails to launch or returns a non-zero exit code.
+/// * `Ok(String)` — Trimmed `stdout` output from Git.
+/// * `Err(Error)` — If Git fails to launch or exits with non-zero status.
 ///
 /// # Errors
 ///
-/// This function returns an [`mdbook::errors::Error`] if:
-/// - The `git` binary is not available or fails to launch.
-/// - The command exits with a non-zero status code.
+/// This function returns an [`Error`] if:
+/// - The `git` binary is missing or fails to start.
+/// - The command returns a non-zero exit code.
+/// - The output cannot be decoded as UTF-8.
 ///
 /// # Example
 ///
@@ -40,7 +54,8 @@ use std::process::{Command, Stdio};
 /// use std::path::Path;
 /// use mdbook_gitinfo::git::get_git_output;
 ///
-/// let hash = get_git_output(["rev-parse", "--short", "HEAD"], Path::new(".")).unwrap();
+/// let hash = get_git_output(["rev-parse", "--short", "HEAD"], Path::new("."))
+///     .expect("failed to get commit hash");
 /// println!("Current short commit hash: {}", hash);
 /// ```
 pub fn get_git_output<I, S>(args: I, dir: &Path) -> Result<String, Error>
@@ -62,14 +77,25 @@ where
     }
 }
 
-/// Verify the branch exists
-/// 
+/// Verify that a branch exists locally in the given repository.
+///
+/// Internally runs:
+/// ```text
+/// git rev-parse --verify <branch>
+/// ```
+///
+/// This is a thin wrapper around [`get_git_output`], returning `true` if the
+/// Git call succeeds and `false` otherwise.
+///
 /// # Arguments
-/// * `branch`: &str representing the branches name
-/// * `dir` - The path to the Git repository root or working directory to execute from.
-/// 
+///
+/// * `branch` — The name of the branch to check.
+/// * `dir` — Path to the Git repository root or working directory.
+///
 /// # Returns
-/// * bool: true or false with respect to whether a branch exists locally or not.
+///
+/// * `true` if the branch exists locally.
+/// * `false` otherwise.
 ///
 /// # Example
 ///
@@ -77,10 +103,11 @@ where
 /// use std::path::Path;
 /// use mdbook_gitinfo::git::verify_branch;
 ///
-/// if !git::verify_branch(&branch, &ctx.root) {
-///     eprintln!("Warning: Branch '{}' not found, falling back to 'main'", branch);
-///     branch = "main".to_string();
+/// let dir = Path::new(".");
+/// if !verify_branch("dev", dir) {
+///     eprintln!("Branch 'dev' not found, falling back to 'main'");
 /// }
+/// ```
 pub fn verify_branch(branch: &str, dir: &Path) -> bool {
     get_git_output(["rev-parse", "--verify", branch], dir).is_ok()
 }
