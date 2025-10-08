@@ -43,3 +43,13 @@ jobs:
             dist/mdbook-gitinfo-linux.tar.gz_sha256sum.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN  }}
+
+      - name: Move 'latest' tag to this release
+        uses: EndBug/latest-tag@latest
+        with:
+            # default ref is 'latest' so this line is optional:
+            ref: latest
+            # leave description empty to create a lightweight tag (what we used)
+            # description: "Latest stable mdbook-gitinfo release"
+            # keep as a tag (default). Set true only if you want a *branch* named 'latest':
+            # force-branch: false

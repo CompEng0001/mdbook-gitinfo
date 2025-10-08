@@ -1,6 +1,5 @@
-
 <div align="center">
-    <h1 align="center"><b>mdbook-gitinfo</b></h1>
+  <h1 align="center"><b>mdbook-gitinfo</b></h1>
 </div>
 
 <p align="center">
@@ -19,116 +18,234 @@
   <img src="https://img.shields.io/badge/Built%20with-Rust-orange?logo=rust&style=for-the-badge" alt="Built with Rust" />
 </p>
 
+An <a href="https://github.com/rust-lang/mdBook">mdBook</a> preprocessor that injects Git metadata (commit hash, full hash, tag, date/time, branch) into each chapter — as a header, a footer, or both — with flexible templates, alignment, and CSS-style margins.
 
-An [mdBook](https://github.com/rust-lang/mdBook) preprocessor that injects Git metadata (e.g., commit hash, date, tag) into your rendered book. This is useful for displaying build provenance or version information.
+---
 
 ## Features
 
-- Injects the latest Git commit information for each/per chapter/subchapter.
-- Fully configurable output format using template variables.
-- Supports date and time formatting.
-- Renders a styled footer below each chapter with Git metadata.
-- Supports the `html` renderer.
+- Injects the latest Git commit information **per chapter** (and subchapters).
+- **Header and/or footer** placement with independent configuration.
+- Message templating via `message.header` / `message.footer` / `message.both`.
+- Split **alignment** for header/footer or a single legacy value.
+- **CSS-style margins (TRBL)** with per-placement overrides and shorthand.
+- Date/time formatting (via `date-format`, `time-format`).
+- Optional **hyperlinks** for commit and branch to your remote provider.
+- Branch verification with graceful fallback to `"main"`.
+- Only the `html` renderer is supported.
+
+---
 
 ## Installation
 
-From package manager:
+From crates.io:
 
 ```sh
 cargo install mdbook-gitinfo
 ```
 
-Clone this repository and install it using Cargo:
+From source (in this repo):
 
 ```sh
 cargo install --path .
 ```
 
-Make sure the binary (`mdbook-gitinfo`) is in your `PATH`.
+Ensure the `mdbook-gitinfo` binary is on your `PATH`.
 
-## Configuration
+---
 
-Add the following to your book.toml:
+## Quick start
+
+Add to `book.toml`:
 
 ```toml
 [preprocessor.gitinfo]
 enable = true
-template = "Date: {{date}}{{sep}}branch: {{branch}}{{sep}}commit: {{hash}}"
-separator = " • "
-font-size = "0.8em"
+
+# choose placement(s)
+header = false   # default: false
+footer = true    # default: true
+
+# common formatting
+font-size   = "0.9em"
+separator   = " • "
 date-format = "%Y-%m-%d"
-time-format = "%H:%M:%S"
-branch = "main" # default is main, therefore optional
+time-format = "%H:%M"
+branch      = "main"
+hyperlink   = true  # make hash/branch clickable when possible
+
+[preprocessor.gitinfo.message]
+footer = "Built {{date}}{{sep}}commit: {{hash}}"
 ```
 
-### Example Output
+---
 
-With the above configuration, this footer will be injected:
+## Configuration via **dotted keys** (with table equivalents)
+
+You can configure options either with **dotted keys** under `[preprocessor.gitinfo]` or with nested **tables** like `[preprocessor.gitinfo.message]`. Use **one style consistently** for readability; both work and merge as expected.
+
+### Message templates
+
+**Placeholders:** `{{hash}}`, `{{long}}`, `{{tag}}`, `{{date}}`, `{{sep}}`, `{{branch}}`  
+**Precedence (per placement):** `message.header/footer` ➝ `message.both` ➝ legacy `header_message/footer_message` ➝ legacy `template`.
+
+> If a placement-specific template is set (`message.header` or `message.footer`), `message.both` is ignored <em>for that placement</em>.
+
+**Dotted keys:**
+```toml
+[preprocessor.gitinfo]
+message.header = "Last updated: <em>{{date}}</em>"
+message.footer = "branch: {{branch}}{{sep}}commit: {{hash}}"
+message.both   = "<em>{{date}}</em>{{sep}}branch: {{branch}}"
+```
+
+**Table form (equivalent):**
+```toml
+[preprocessor.gitinfo.message]
+header = "Last updated: <em>{{date}}</em>"
+footer = "branch: {{branch}}{{sep}}commit: {{hash}}"
+both   = "<em>{{date}}</em>{{sep}}branch: {{branch}}"
+```
+
+---
+
+### Align
+
+Values: `"left" | "center" | "right"` (default **center** for both).
+
+**Resolution:** `align.header` and/or `align.footer` override `align.both`.  
+If neither is set, both default to `"center"`.
+
+**Dotted keys:**
+```toml
+[preprocessor.gitinfo]
+align.header = "left"
+align.footer = "right"
+align.both   = "center"   # used only for any placement not explicitly set
+```
+
+**Table form (equivalent):**
+```toml
+[preprocessor.gitinfo.align]
+both   = "center"
+header = "left"
+footer = "right"
+```
+
+---
+
+### Margin (TRBL)
+
+Margins accept CSS-style **T**op **R**ight **B**ottom **L**eft values. Units can be `px`, `em`, etc., or unitless (`0`).  
+You can provide:
+- a **single value** (applies to all sides),
+- an **array** with 1–4 items (CSS shorthand),
+- or **named sides** (`top/right/bottom/left`).
+
+**Resolution:** `margin.header` / `margin.footer` override `margin.both` per placement.
+
+**Defaults (when unset):**
+- **Header:** `["0", "0", "2em", "0"]` (space **below** the header block)
+- **Footer:** `["2em", "0", "0", "0"]` (space **above** the footer block)
+- Legacy `margin-top` (if present) is treated as **footer top** spacing.
+
+**Dotted keys (array shorthand):**
+```toml
+[preprocessor.gitinfo]
+margin.header = ["0", "0", "1.25em", "0"]  # T R B L
+margin.footer = ["2em", "0", "0", "0"]     # T R B L
+margin.both   = "1em"                      # all sides = 1em unless overridden
+```
+
+**Dotted keys (named sides):**
+```toml
+[preprocessor.gitinfo]
+margin.header.top     = "5em"
+margin.footer.bottom  = "2em"
+margin.both.left      = "0.5em"
+```
+
+**Table form (equivalent):**
+```toml
+[preprocessor.gitinfo.margin]
+both   = ["1em"]                     # all sides = 1em
+header = ["0", "0", "1.25em", "0"]   # T R B L
+footer = { top = "2em" }             # named sides form
+```
+
+---
+
+## Placeholders
+
+Use these tokens inside your message templates:
+
+- `{{hash}}` — short commit hash
+- `{{long}}` — full commit hash
+- `{{tag}}` — nearest tag
+- `{{date}}` — commit date and time (combined using your `date-format` and `time-format`)
+- `{{sep}}` — the configured separator (e.g., `" • "`)
+- `{{branch}}` — branch name
+
+---
+
+## Example output
+
+With the configuration above, a footer will be injected similar to:
 
 ```html
-<footer>
-  <span class="gitinfo-footer" style="font-size:0.8em;...">
-    Date: 2025-06-23 16:19:28 • branch: main • commit: 2160ec5
-  </span>
+<footer class="gitinfo-footer" style="font-size:0.8em;padding:4px;margin:2em 0 0 0;text-align:center;display:block;">
+  branch: <b><a href="somelinktosomeawesomerepo">main</a></b> • commit: <a href="somelinktosomeawesomerepo">9296b47</a>
 </footer>
 ```
 
-> [!NOTE]
-> date and time formatting use chrono format specifiers
-> | Format | Meaning                      | Example  | |Format  | Meaning                        | Example  |
-> | ------ | ---------------------------- | -------- |-| ------ | ------------------------------ | -------- |
-> | `%Y`   | Year with century            | `2025`   | | `%H`   | Hour (00-23)                   | `14`     |
-> | `%y`   | Year without century (00-99) | `25`     | | `%I`   | Hour (01-12)                   | `02`     |
-> | `%m`   | Month number (01-12)         | `06`     | | `%p`   | AM/PM                          | `PM`     |
-> | `%b`   | Abbreviated month name       | `Jun`    | | `%M`   | Minute (00-59)                 | `05`     |
-> | `%B`   | Full month name              | `June`   | | `%S`   | Second (00-60, leap-sec aware) | `09`     |
-> | `%d`   | Day of month (01-31)         | `24`     | | `%f`   | Microseconds (000000-999999)   | `123456` |
-> | `%e`   | Day of month, space-padded   | `24`     | | `%z`   | +hhmm timezone offset          | `+0100`  |
-> | `%a`   | Abbreviated weekday          | `Mon`    | | `%:z`  | +hh\:mm timezone offset        | `+01:00` |
-> | `%A`   | Full weekday name            | `Monday` | | `%Z`   | Time zone name                 | `BST`    |
-> | `%j`   | Day of year (001–366)        | `176`    | ||||
+> The preprocessor inserts blank lines around injected blocks so Markdown headings/paragraphs render correctly.
 
+---
 
-## Template Variables
-You can use the following placeholders in the template string:
+## Formatting & Git options
 
-- `{{hash}}`: Short commit hash (`git rev-parse --short HEAD`)
+- `font-size` — e.g., `"0.8em"`
+- `separator` — string used by `{{sep}}`
+- `date-format`, `time-format` — chrono formatting strings (examples below)
+- `branch` — default `"main"`. If the branch isn’t found, the preprocessor falls back to `"main"` with a warning.
+- `hyperlink` — when `true`, `{{hash}}` and `{{branch}}` are linked to your provider (derived from CI env vars like `GITHUB_SERVER_URL`/`GITHUB_REPOSITORY`, `CI_SERVER_URL`/`CI_PROJECT_PATH`, Bitbucket vars, or `remote.origin.url`).
 
-- `{{long}}`: Full commit hash
+### Common chrono format specifiers
 
-- `{{tag}}`: Git tag (from `git describe`)
+For DateTime format specifiers refer to `chrono`::`format`:
+- [https://docs.rs/chrono/latest/chrono/format/strftime/index.html](https://docs.rs/chrono/latest/chrono/format/strftime/index.html)
 
-- `{{date}}`: Timestamp of the latest commit, formatted
+---
 
-- `{{sep}}`: Separator (defaults to " • ")
+## CI note (GitHub Actions)
 
-## .github/workflow/...
-
-In order for mdbook-gitinfo to reference the correct commit whilst using `actions/checkout@v4`, set `fetch-depth` as `0`:
+When using `actions/checkout@v4`, set `fetch-depth: 0` so the plugin can access commit history:
 
 ```yml
-...
 jobs:
   deploy:
     runs-on: ubuntu-22.04
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-...
+      # … your build & deploy steps
 ```
+
+---
 
 ## Compatibility
 
-- `mdbook-gitinfo` is tested with mdbook 0.4.x.
+- Tested with **mdBook 0.4.x**.
+- Renderer support: **html** only.
 
-- Only the html renderer is supported.
+---
 
 ## License
 
 [Apache-2.0](LICENSE.md)
+
+---
 
 ## Author
 
