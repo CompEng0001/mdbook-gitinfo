@@ -21,6 +21,60 @@ use mdbook::errors::Error;
 use mdbook::preprocess::PreprocessorContext;
 use serde::Deserialize;
 
+#[derive(Debug, Deserialize, Default)]
+pub struct MessageConfig {
+    /// Header message template
+    pub header: Option<String>,
+    /// Footer message template
+    pub footer: Option<String>,
+    /// Default for both (used if header/footer not set)
+    pub both: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum MarginSetting {
+    /// "1em"
+    One(String),
+    /// ["top", "right", "bottom", "left"] — supports 1–4 entries like CSS shorthand
+    Quad(Vec<String>),
+    /// { top = "...", right = "...", bottom = "...", left = "..." }
+    Sides {
+        top: Option<String>,
+        right: Option<String>,
+        bottom: Option<String>,
+        left: Option<String>,
+    },
+}
+
+impl Default for MarginSetting {
+    fn default() -> Self { MarginSetting::One("0".to_string()) }
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct MarginConfig {
+    pub header: Option<MarginSetting>,
+    pub footer: Option<MarginSetting>,
+    pub both:   Option<MarginSetting>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum AlignSetting {
+    /// Legacy: align = "center"
+    One(String),
+    /// New: align = { header = "...", footer = "...", both = "..." }
+    Split {
+        header: Option<String>,
+        footer: Option<String>,
+        both:   Option<String>,
+    },
+}
+
+impl Default for AlignSetting {
+    fn default() -> Self { AlignSetting::One("center".to_string()) }
+}
+
 /// Represents the user-defined configuration options under `[preprocessor.gitinfo]`
 /// in `book.toml`.
 ///
@@ -44,7 +98,15 @@ pub struct GitInfoConfig {
     /// - `{{tag}}` → nearest tag
     /// - `{{date}}` → commit date
     /// - `{{sep}}` → separator string
+    /// (Deprecated) Old single template. If present, used as a fallback for footer_message.
     pub template: Option<String>,
+    
+    // Placement switches
+    pub header: Option<bool>,
+    pub footer: Option<bool>,
+
+    /// Message templates in a table: message.header/message.footer/message.both
+    pub message: Option<MessageConfig>,
 
     /// CSS font size for the rendered footer text.
     ///
@@ -76,18 +138,14 @@ pub struct GitInfoConfig {
     /// Default: `"main"`.
     pub branch: Option<String>,
 
-    /// CSS option to align footer 
-    ///
-    /// Options: "left | center | right" 
-    /// Default: `"center"`.
-    pub align: Option<String>,
+    /// Flexible align
+    /// - align = "center"
+    /// - align.header = "left", align.footer = "right"
+    /// - [preprocessor.gitinfo.align] both = "center"
+    pub align: Option<AlignSetting>,
 
     /// CSS option to adjust margin between body and footer 
-    ///
-    /// Options: should use em 
-    /// Default: `"center"`.
-    #[serde(rename = "margin-top")]
-    pub margin_top: Option<String>,
+    pub margin: Option<MarginConfig>,
 
     /// CSS option provides a hyperlink to the respective branch and commit  
     /// in the footer
@@ -133,31 +191,47 @@ pub fn load_config(ctx: &PreprocessorContext) -> Result<GitInfoConfig, Error> {
 mod tests {
     use super::*;
     use mdbook::Config;
-    use std::collections::BTreeMap;
-    use toml::Value;
 
-    fn make_context_with_toml(toml: &str) -> PreprocessorContext {
+    fn ctx(toml: &str) -> mdbook::preprocess::PreprocessorContext {
         let parsed: toml::Value = toml::from_str(toml).unwrap();
         let mut config = Config::default();
         config.set("preprocessor.gitinfo", parsed);
-        PreprocessorContext {
-            config,
-            ..Default::default()
+        mdbook::preprocess::PreprocessorContext { config, ..Default::default() }
+    }
+
+    #[test]
+    fn parses_legacy_align() {
+        let c = load_config(&ctx(r#"align = "left""#)).unwrap();
+        match c.align.unwrap() {
+            AlignSetting::One(s) => assert_eq!(s, "left"),
+            _ => panic!("expected One"),
         }
     }
 
     #[test]
-    fn parses_valid_config() {
-        let ctx = make_context_with_toml(
-            r#"
-                template = "Commit: {{hash}}"
-                separator = " | "
-                font-size = "1em"
-            "#,
-        );
+    fn parses_split_align() {
+        let c = load_config(&ctx(r#"
+            [align]
+            both = "center"
+            header = "left"
+        "#)).unwrap();
+        match c.align.unwrap() {
+            AlignSetting::Split { header, footer, both } => {
+                assert_eq!(header.as_deref(), Some("left"));
+                assert_eq!(footer, None);
+                assert_eq!(both.as_deref(), Some("center"));
+            }
+            _ => panic!("expected Split"),
+        }
+    }
 
-        let config = load_config(&ctx).unwrap();
-        assert_eq!(config.template.unwrap(), "Commit: {{hash}}");
-        assert_eq!(config.separator.unwrap(), " | ");
+    #[test]
+    fn message_resolution_parses() {
+        let c = load_config(&ctx(r#"
+            [message]
+            both = "D: {{date}}"
+            header = "H: {{date}}"
+        "#)).unwrap();
+        assert_eq!(c.message.unwrap().header.unwrap(), "H: {{date}}");
     }
 }
