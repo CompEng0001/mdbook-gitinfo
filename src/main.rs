@@ -3,7 +3,7 @@
 //! This preprocessor extracts the latest commit hash, tag, and timestamp from the repository
 //! and renders it into each chapter, typically for provenance or change-tracking purposes.
 
-use mdbook_gitinfo::config::load_config;
+use mdbook_gitinfo::config::{load_config,AlignSetting,GitInfoConfig,MarginConfig, MarginSetting};
 use mdbook_gitinfo::git;
 
 use chrono::{DateTime, Local};
@@ -43,12 +43,12 @@ impl Preprocessor for GitInfo {
         }
 
         // Git metadata extraction
-        let template = cfg
-            .template
-            .unwrap_or_else(|| "{{date}}{{sep}}commit: {{hash}}".to_string());
+        let show_header = cfg.header.unwrap_or(false);
+        let show_footer = cfg.footer.unwrap_or(true);
+        let (header_tmpl, footer_tmpl) = resolve_messages(&cfg);
         let font_size = cfg.font_size.unwrap_or_else(|| "0.8em".to_string());
-        let text_align = cfg.align.unwrap_or_else(|| "center".to_string());
-        let margin_top = cfg.margin_top.unwrap_or_else(|| "2em".to_string());
+        let (align_header, align_footer) = resolve_align(&cfg.align);
+        let (margin_header, margin_footer) = resolve_margins(&cfg.margin);
         let separator = cfg.separator.unwrap_or_else(|| " • ".to_string());
         let date_format = cfg.date_format.unwrap_or_else(|| "%Y-%m-%d".to_string());
         let time_format = cfg.time_format.unwrap_or_else(|| "%H:%M:%S".to_string());
@@ -75,32 +75,23 @@ impl Preprocessor for GitInfo {
                     let short_hash = git::get_git_output(
                         ["log", "-1", "--format=%h", &format!("{branch}"), "--", &path_str],
                         &ctx.root,
-                    )
-                    .unwrap_or_default();
+                    ).unwrap_or_default();
+
                     let long_hash = git::get_git_output(
                         ["log", "-1", "--format=%H", &format!("{branch}"), "--", &path_str],
                         &ctx.root,
-                    )
-                    .unwrap_or_default();
+                    ).unwrap_or_default();
+
                     let tag = git::get_git_output(
                         ["describe", "--tags", "--always", "--", &path_str],
                         &ctx.root,
-                    )
-                    .unwrap_or_default();
-                    let raw_date = git::get_git_output(
-                        [
-                            "log",
-                            "-1",
-                            "--format=%cd",
-                            "--date=iso-strict",
-                            "--",
-                            &path_str,
-                        ],
-                        &ctx.root,
-                    )
-                    .unwrap_or_else(|_| "unknown".to_string());
+                    ).unwrap_or_default();
 
-                    // Attempt to parse and format the commit timestamp
+                    let raw_date = git::get_git_output(
+                        ["log", "-1", "--format=%cd", "--date=iso-strict", "--", &path_str],
+                        &ctx.root,
+                    ).unwrap_or_else(|_| "unknown".to_string());
+
                     let formatted_date = DateTime::parse_from_rfc3339(&raw_date)
                         .map(|dt| {
                             format!(
@@ -123,31 +114,40 @@ impl Preprocessor for GitInfo {
                     };
 
                     // Render the template
-                    let rendered = render_template(
-                        &template,
-                        &hash_disp,
-                        &long_hash,
-                        &tag,
-                        &formatted_date,
-                        &separator,
-                        &branch_disp,
-                    );
+                    let render = |tmpl: &str| {
+                                    render_template(
+                                        tmpl,
+                                        &hash_disp,
+                                        &long_hash,
+                                        &tag,
+                                        &formatted_date,
+                                        &separator,
+                                        &branch_disp,
+                                    )
+                                };
 
-                    // Inline style for visibility control
-                    let style = format!(
-                        "font-size:{};padding:4px;margin-top:{};text-align:{};display:block;",
-                        font_size, margin_top, text_align
-                    );
+                    // Header (prepend)
+                    if show_header {
+                        let style = style_block(&font_size, &align_header, &margin_header);
+                        let html  = wrap_block(true, &style, &render(&header_tmpl));
+                        let insertion = format!("{}\n\n", html); // keep blank line to not break Markdown
+                        if !ch.content.starts_with(&insertion) {
+                            ch.content = format!("{}{}", insertion, ch.content);
+                        }
+                    }
 
-                    let decorated = format!(
-                        "<footer class=\"gitinfo-footer\" style=\"{}\">{}</footer>",
-                        style, rendered
-                    );
-
-                    // Inject footer into all chapters/subchapters etc
-                    if !ch.content.contains(&decorated) {
-                        ch.content.push_str("\n");
-                        ch.content.push_str(&decorated);
+                    // Footer (append)
+                    if show_footer {
+                        let style = style_block(&font_size, &align_footer, &margin_footer);
+                        let html  = wrap_block(false, &style, &render(&footer_tmpl));
+                        // ensure at least one blank line before footer
+                        let needs_leading_blank = !ch.content.ends_with("\n\n");
+                        let prefix = if needs_leading_blank { "\n\n" } else { "\n" };
+                        if !ch.content.contains(&html) {
+                            ch.content.push_str(prefix);
+                            ch.content.push_str(&html);
+                            ch.content.push('\n');
+                        }
                     }
                 }
             });
@@ -228,6 +228,196 @@ fn resolve_repo_base(ctx_root: &std::path::Path) -> Option<String> {
     None
 }
 
+/// Resolve the header/footer **message templates** from config with clear precedence.
+/// 
+/// Precedence (highest → lowest) for each placement:
+/// - `message.header` / `message.footer`
+/// - legacy `header_message` / `footer_message`
+/// - `message.both`
+/// - legacy `template`
+/// - hardcoded default: `"{{date}}{{sep}}commit: {{hash}}"`
+/// 
+/// Notes:
+/// - This function does **not** validate or expand placeholders; it just picks strings.
+/// - Placeholders like `{{hash}}`, `{{long}}`, `{{tag}}`, `{{date}}`, `{{sep}}`, `{{branch}}`
+///   are expanded later by `render_template`.
+fn resolve_messages(cfg: &GitInfoConfig) -> (String, String) {
+    // Defaults if nothing provided
+    let default = "{{date}}{{sep}}commit: {{hash}}".to_string();
+
+    // Prefer message.header/footer; then header_message/footer_message; then message.both; then legacy template; finally default
+    let both = cfg.message.as_ref().and_then(|m| m.both.clone());
+
+    let header = cfg.message.as_ref().and_then(|m| m.header.clone())
+        .or_else(|| both.clone())
+        .or_else(|| cfg.template.clone())
+        .unwrap_or_else(|| default.clone());
+
+    let footer = cfg.message.as_ref().and_then(|m| m.footer.clone())
+        .or_else(|| both.clone())
+        .or_else(|| cfg.template.clone())
+        .unwrap_or(default);
+
+    (header, footer)
+}
+
+/// Resolve **header** and **footer** text alignment, supporting both legacy and split config.
+/// 
+/// Accepted config shapes:
+/// - Legacy: `align = "center"` → applies to both header & footer
+/// - Split table: `[align] both = "...", header = "...", footer = "..."`
+/// 
+/// Resolution:
+/// - If split: `header` overrides, `footer` overrides, `both` is the fallback
+/// - If legacy single value: used for both
+/// - Default when unspecified: `"center"` for both
+fn resolve_align(a: &Option<AlignSetting>) -> (String, String) {
+    match a {
+        Some(AlignSetting::One(s)) => (s.clone(), s.clone()),
+        Some(AlignSetting::Split { header, footer, both }) => {
+            let both_v = both.clone().unwrap_or_else(|| "center".to_string());
+            let h = header.clone().unwrap_or_else(|| both_v.clone());
+            let f = footer.clone().unwrap_or_else(|| both_v);
+            (h, f)
+        }
+        None => ("center".into(), "center".into()),
+    }
+}
+
+/// Convert a `MarginSetting` into a CSS-style **TRBL** array: `[top, right, bottom, left]`.
+/// 
+/// Supported forms:
+/// - `One("1em")` → `["1em","1em","1em","1em"]`
+/// - `Quad(["a"])` → same as `One("a")`
+/// - `Quad(["t","rl"])` → `T=t, R=rl, B=t, L=rl`
+/// - `Quad(["t","r","b"])` → `T=t, R=r, B=b, L=r`
+/// - `Quad(["t","r","b","l"])` → `T=t, R=r, B=b, L=l`
+/// - `Sides { top, right, bottom, left }` → combine with per-side fallbacks
+/// 
+/// `fallback` provides default values for any unspecified side in `Sides`
+/// and for degenerate cases. It must be a TRBL slice of `&str`.
+fn margin_from_setting(ms: &MarginSetting, fallback: [&str; 4]) -> [String; 4] {
+    match ms {
+        MarginSetting::One(v) => [v.clone(), v.clone(), v.clone(), v.clone()],
+        MarginSetting::Quad(vs) => {
+            match vs.len() {
+                0 => fallback.map(|s| s.to_string()),
+                1 => {
+                    let v = vs[0].clone();
+                    [v.clone(), v.clone(), v.clone(), v]
+                }
+                2 => {
+                    let vtb = vs[0].clone();
+                    let vrl = vs[1].clone();
+                    [vtb.clone(), vrl.clone(), vtb, vrl]
+                }
+                3 => {
+                    let t = vs[0].clone();
+                    let rl = vs[1].clone();
+                    let b = vs[2].clone();
+                    [t, rl.clone(), b, rl]
+                }
+                _ => {
+                    [vs[0].clone(), vs[1].clone(), vs[2].clone(), vs[3].clone()]
+                }
+            }
+        }
+        MarginSetting::Sides { top, right, bottom, left } => {
+            [
+                top.clone().unwrap_or_else(|| fallback[0].to_string()),
+                right.clone().unwrap_or_else(|| fallback[1].to_string()),
+                bottom.clone().unwrap_or_else(|| fallback[2].to_string()),
+                left.clone().unwrap_or_else(|| fallback[3].to_string()),
+            ]
+        }
+    }
+}
+
+/// Resolve **header** and **footer** TRBL margins with support for:
+/// - `[margin].both` as a base,
+/// - per-placement overrides `[margin].header` / `[margin].footer`,
+/// - and legacy `margin-top` (interpreted as **footer top** spacing).
+/// 
+/// Defaults when nothing set:
+/// - Header: `["0","0","2em","0"]` (space **below** header block)
+/// - Footer: `[legacy_top_or("2em"),"0","0","0"]` (space **above** footer block)
+/// 
+/// Returns: `(header_trbl, footer_trbl)` where each is `[top,right,bottom,left]`.
+fn resolve_margins(
+    m: &Option<MarginConfig>
+) -> ([String;4], [String;4]) {
+    // sensible defaults if nothing specified:
+    // header default: add space UNDER the header
+    let default_header = ["0", "0", "2em", "0"];
+    // footer default: add space ABOVE the footer (legacy behavior)
+    let default_footer = ["0", "0", "2em", "0"];
+
+    // start with both-default if present
+    let both = m.as_ref().and_then(|mm| mm.both.as_ref());
+    let base = both.map(|b| margin_from_setting(b, ["0","0","0","0"]))
+                   .unwrap_or(["0".into(),"0".into(),"0".into(),"0".into()]);
+
+    let header = m.as_ref().and_then(|mm| mm.header.as_ref())
+        .map(|h| margin_from_setting(h, [
+            &base[0], &base[1], &base[2], &base[3]
+        ]))
+        .unwrap_or_else(|| default_header.map(|s| s.to_string()));
+
+    let footer = m.as_ref().and_then(|mm| mm.footer.as_ref())
+        .map(|f| margin_from_setting(f, [
+            &base[0], &base[1], &base[2], &base[3]
+        ]))
+        .unwrap_or_else(|| default_footer.map(|s| s.to_string()));
+
+    (header, footer)
+}
+
+/// Join a TRBL margin array into a single CSS `margin` string: `"T R B L"`.
+fn css_margin_string(m: &[String; 4]) -> String {
+    format!("{} {} {} {}", m[0], m[1], m[2], m[3])
+}
+
+/// Build an inline CSS style string for a header/footer block.
+/// 
+/// Includes:
+/// - `font-size` (as provided),
+/// - fixed `padding:4px`,
+/// - `margin` in TRBL form (joined by `css_margin_string`),
+/// - `text-align`,
+/// - `display:block`.
+/// 
+/// Notes:
+/// - Values are concatenated directly; ensure trusted inputs or pre-validate.
+/// - This function does **not** add surrounding blank lines—callers should insert
+///   `\n\n` after a header block and at least `\n` before a footer block to avoid
+///   breaking Markdown parsing.
+fn style_block(font_size: &str, align: &str, margin4: &[String; 4]) -> String {
+    format!(
+        "font-size:{};padding:4px;margin:{};text-align:{};display:block;",
+        font_size,
+        css_margin_string(margin4),
+        align
+    )
+}
+
+/// Wrap the given HTML fragment in either a `<header>` or `<footer>` element with class and style.
+/// 
+/// - When `is_header == true`, returns:
+///   `<header class="gitinfo-header" style="...">…</header>`
+/// - Otherwise returns:
+///   `<footer class="gitinfo-footer" style="...">…</footer>`
+/// 
+/// Notes:
+/// - This function **does not** insert blank lines around the block—callers should
+///   ensure a blank line follows headers and precedes footers so Markdown is parsed correctly.
+/// - The `html` content is assumed to be pre-rendered (already escaped as needed).
+fn wrap_block(is_header: bool, style: &str, html: &str) -> String {
+    if is_header {
+        format!(r#"<header class="gitinfo-header" style="{}">{}</header>"#, style, html)
+    } else {
+        format!(r#"<footer class="gitinfo-footer" style="{}">{}</footer>"#, style, html)
+    }
+}
 
 /// Entry point for the `mdbook-gitinfo` binary.
 ///
