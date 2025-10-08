@@ -27,11 +27,15 @@ use serde::Deserialize;
 /// Each field is optional; defaults are handled in the preprocessor logic.
 /// The configuration allows users to control how commit metadata is formatted
 /// and rendered in the generated book.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize,Default)]
 pub struct GitInfoConfig {
+    /// Gate to turn the preprocessor on/off without removing the section.
+    /// Default: true (when omitted).
+    pub enable: Option<bool>,
+
     /// The formatting style of the git data (currently unused, reserved for future use).
     pub format: Option<String>,
-
+    
     /// Template string defining how git metadata is rendered.
     ///
     /// Supported placeholders:
@@ -71,6 +75,26 @@ pub struct GitInfoConfig {
     ///
     /// Default: `"main"`.
     pub branch: Option<String>,
+
+    /// CSS option to align footer 
+    ///
+    /// Options: "left | center | right" 
+    /// Default: `"center"`.
+    pub align: Option<String>,
+
+    /// CSS option to adjust margin between body and footer 
+    ///
+    /// Options: should use em 
+    /// Default: `"center"`.
+    #[serde(rename = "margin-top")]
+    pub margin_top: Option<String>,
+
+    /// CSS option provides a hyperlink to the respective branch and commit  
+    /// in the footer
+    ///
+    /// Options: "true | false" 
+    /// Default: `false`.
+    pub hyperlink: Option<bool>,
 }
 
 /// Load and deserialize the `[preprocessor.gitinfo]` table from `book.toml`.

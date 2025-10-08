@@ -34,17 +34,27 @@ impl Preprocessor for GitInfo {
 
     /// Injects rendered Git metadata into each chapter of the book.
     fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book, Error> {
-        let cfg = load_config(ctx)?;
+        // If the config table is absent or invalid, fall back to defaults.
+        let cfg = load_config(ctx).unwrap_or_default();
+
+        let enabled = cfg.enable.unwrap_or(true);
+        if !enabled {
+            return Ok(book);
+        }
 
         // Git metadata extraction
         let template = cfg
             .template
             .unwrap_or_else(|| "{{date}}{{sep}}commit: {{hash}}".to_string());
         let font_size = cfg.font_size.unwrap_or_else(|| "0.8em".to_string());
+        let text_align = cfg.align.unwrap_or_else(|| "center".to_string());
+        let margin_top = cfg.margin_top.unwrap_or_else(|| "2em".to_string());
         let separator = cfg.separator.unwrap_or_else(|| " • ".to_string());
         let date_format = cfg.date_format.unwrap_or_else(|| "%Y-%m-%d".to_string());
         let time_format = cfg.time_format.unwrap_or_else(|| "%H:%M:%S".to_string());
         let mut branch = cfg.branch.unwrap_or_else(|| "main".to_string());
+        let hyperlink = cfg.hyperlink.unwrap_or(false);
+        let repo_base = if hyperlink { resolve_repo_base(&ctx.root) } else { None };
 
         // Verify the branch exists
         if !git::verify_branch(&branch, &ctx.root) {
@@ -101,25 +111,36 @@ impl Preprocessor for GitInfo {
                         })
                         .unwrap_or_else(|_| "unknown".to_string());
 
+                    let (hash_disp, branch_disp) = if let (true, Some(base)) = (hyperlink, repo_base.as_ref()) {
+                        let commit_url = format!("{}/commit/{}", base, long_hash);
+                        let branch_url = format!("{}/tree/{}", base, branch);
+                        (
+                            format!(r#"<a href="{}">{}</a>"#, commit_url, short_hash),
+                            format!(r#"<a href="{}">{}</a>"#, branch_url, branch),
+                        )
+                    } else {
+                        (short_hash.clone(), branch.clone())
+                    };
+
                     // Render the template
                     let rendered = render_template(
                         &template,
-                        &short_hash,
+                        &hash_disp,
                         &long_hash,
                         &tag,
                         &formatted_date,
                         &separator,
-                        &branch,
+                        &branch_disp,
                     );
 
                     // Inline style for visibility control
                     let style = format!(
-                        "font-size:{};padding:4px;margin:0.5em 0;text-align:right;display:block;",
-                        font_size
+                        "font-size:{};padding:4px;margin-top:{};text-align:{};display:block;",
+                        font_size, margin_top, text_align
                     );
 
                     let decorated = format!(
-                        "<footer><span class=\"gitinfo-footer\" style=\"{}\">{}</span></footer>",
+                        "<footer class=\"gitinfo-footer\" style=\"{}\">{}</footer>",
                         style, rendered
                     );
 
@@ -171,6 +192,43 @@ fn handle_supports(pre: &dyn Preprocessor, sub_args: &ArgMatches) -> ! {
     process::exit(1);
 }
 
+// normalises repo url from ssh to https
+fn normalise_repo_base(url: &str) -> String {
+    let u = url.trim().trim_end_matches(".git").to_string();
+    if let Some(rest) = u.strip_prefix("git@github.com:") {
+        return format!("https://github.com/{rest}");
+    }
+    if let Some(rest) = u.strip_prefix("ssh://git@github.com/") {
+        return format!("https://github.com/{rest}");
+    }
+    u
+}
+
+// Depending environment the repo name is and url is retrieved
+fn resolve_repo_base(ctx_root: &std::path::Path) -> Option<String> {
+    if let (Ok(server), Ok(repo)) = (std::env::var("GITHUB_SERVER_URL"), std::env::var("GITHUB_REPOSITORY")) {
+        return Some(format!("{}/{}", server.trim_end_matches('/'), repo));
+    }
+
+    if let (Ok(server), Ok(path)) = (std::env::var("CI_SERVER_URL"), std::env::var("CI_PROJECT_PATH")) {
+        return Some(format!("{}/{}", server.trim_end_matches('/'), path));
+    }
+
+    if let Ok(http_origin) = std::env::var("BITBUCKET_GIT_HTTP_ORIGIN") {
+        return Some(normalise_repo_base(&http_origin));
+    }
+    if let Ok(full) = std::env::var("BITBUCKET_REPO_FULL_NAME") {
+        return Some(format!("https://bitbucket.org/{}", full));
+    }
+
+    if let Ok(remote) = mdbook_gitinfo::git::get_git_output(["config", "--get", "remote.origin.url"], ctx_root) {
+        return Some(normalise_repo_base(&remote));
+    }
+
+    None
+}
+
+
 /// Entry point for the `mdbook-gitinfo` binary.
 ///
 /// Supports two modes:
@@ -197,6 +255,7 @@ fn main() {
         process::exit(1);
     }
 }
+
 
 pub fn render_template(
     template: &str,
@@ -236,11 +295,12 @@ mod tests {
     fn render_template_basic() {
         let output = render_template(
             "Commit: {{hash}} on {{date}}",
-            "abcd123",
-            "",
-            "",
+            "abcd123",  // hash
+            "",         // long_hash
+            "",         // tag
             "2025-06-24",
             "|",
+            "",         // branch
         );
         assert_eq!(output, "Commit: abcd123 on 2025-06-24");
     }
