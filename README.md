@@ -29,7 +29,7 @@ An <a href="https://github.com/rust-lang/mdBook">mdBook</a> preprocessor that in
 - Message templating via `message.header` / `message.footer` / `message.both`.
 - Split **alignment** for header/footer or a single legacy value.
 - **CSS-style margins (TRBL)** with per-placement overrides and shorthand.
-- Date/time formatting (via `date-format`, `time-format`).
+- **Timezone-aware date/time rendering** (local, UTC, source, or fixed offset).
 - Optional **hyperlinks** for commit and branch to your remote provider.
 - Branch verification with graceful fallback to `"main"`.
 - Only the `html` renderer is supported.
@@ -70,9 +70,12 @@ footer = true    # default: true
 font-size   = "0.9em"
 separator   = " • "
 date-format = "%Y-%m-%d"
-time-format = "%H:%M"
+time-format = "%H:%M:%S"
 branch      = "main"
 hyperlink   = true  # make hash/branch clickable when possible
+
+# optional timezone handling
+timezone = "local"   # "local" (default) | "utc" | "source" | "fixed:+02:00"
 
 [preprocessor.gitinfo.message]
 footer = "Built {{date}}{{sep}}commit: {{hash}}"
@@ -83,6 +86,21 @@ footer = "Built {{date}}{{sep}}commit: {{hash}}"
 ## Configuration via **dotted keys** (with table equivalents)
 
 You can configure options either with **dotted keys** under `[preprocessor.gitinfo]` or with nested **tables** like `[preprocessor.gitinfo.message]`. Use **one style consistently** for readability; both work and merge as expected.
+
+### Timezone
+
+The new timezone option controls how commit timestamps are rendered.
+
+| Value                            | Description                                              |
+| -------------------------------- | -------------------------------------------------------- |
+| `local` *(default)*              | Convert to system local time.                            |
+| `utc`                            | Convert to Coordinated Universal Time (UTC).             |
+| `source`                         | Use the commit’s recorded timezone offset (as authored). |
+| `fixed:+HH:MM` or `fixed:-HH:MM` | Force a specific fixed offset.                           |
+| *anything else*                  | Emits a warning and falls back to `local`.               |
+
+>[!NOTE]
+>The offset is always applied, but not shown unless you include `%z`, `%:z`, or `%Z` in your time-format
 
 ### Message templates
 
@@ -196,6 +214,7 @@ With the configuration above, a footer will be injected similar to:
 <footer class="gitinfo-footer" style="font-size:0.8em;padding:4px;margin:2em 0 0 0;text-align:center;display:block;">
   branch: <b><a href="somelinktosomeawesomerepo">main</a></b> • commit: <a href="somelinktosomeawesomerepo">9296b47</a>
 </footer>
+
 ```
 
 > The preprocessor inserts blank lines around injected blocks so Markdown headings/paragraphs render correctly.
