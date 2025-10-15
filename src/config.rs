@@ -153,6 +153,10 @@ pub struct GitInfoConfig {
     /// Options: "true | false" 
     /// Default: `false`.
     pub hyperlink: Option<bool>,
+
+    pub timezone: Option<String>,        // "local" | "utc" | "source" | "fixed:+01:00" | "rfc3339"
+    pub datetime_format: Option<String>, // optional: if set, overrides date/time format join
+    pub show_offset: Option<bool>,       // optional: if true and no %z/%:z/%Z, append %:z
 }
 
 /// Load and deserialize the `[preprocessor.gitinfo]` table from `book.toml`.
