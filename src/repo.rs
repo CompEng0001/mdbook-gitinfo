@@ -30,3 +30,16 @@ pub fn resolve_repo_base(ctx_root: &std::path::Path) -> Option<String> {
     }
     None
 }
+
+pub fn tag_url(base: &str, tag: &str) -> String {
+    if base.contains("github.com") {
+        format!("{}/releases/tag/{}", base, tag)
+    } else if base.contains("gitlab") {
+        format!("{}/-/tags/{}", base, tag)
+    } else if base.contains("bitbucket.org") {
+        format!("{}/src/{}", base, tag)
+    } else {
+        // generic-ish fallback
+        format!("{}/tags/{}", base, tag)
+    }
+}

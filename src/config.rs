@@ -95,7 +95,7 @@ pub struct GitInfoConfig {
     /// Supported placeholders:
     /// - `{{hash}}` → short commit hash
     /// - `{{long}}` → full commit hash
-    /// - `{{tag}}` → nearest tag
+    /// - `{{tag}}` → lastest tag or user defined
     /// - `{{date}}` → commit date
     /// - `{{sep}}` → separator string
     /// (Deprecated) Old single template. If present, used as a fallback for footer_message.
@@ -133,6 +133,11 @@ pub struct GitInfoConfig {
     #[serde(rename = "time-format")]
     pub time_format: Option<String>,
 
+
+    pub timezone: Option<String>,        // "local" | "utc" | "source" | "fixed:+01:00" | "rfc3339"
+    pub datetime_format: Option<String>, // optional: if set, overrides date/time format join
+    pub show_offset: Option<bool>,       // optional: if true and no %z/%:z/%Z, append %:z
+    
     /// Git branch from which to retrieve commit history.
     ///
     /// Default: `"main"`.
@@ -147,6 +152,9 @@ pub struct GitInfoConfig {
     /// CSS option to adjust margin between body and footer 
     pub margin: Option<MarginConfig>,
 
+    // explicit tag override (if set, use this instead of auto-detect)
+    pub tag: Option<String>,
+
     /// CSS option provides a hyperlink to the respective branch and commit  
     /// in the footer
     ///
@@ -154,9 +162,6 @@ pub struct GitInfoConfig {
     /// Default: `false`.
     pub hyperlink: Option<bool>,
 
-    pub timezone: Option<String>,        // "local" | "utc" | "source" | "fixed:+01:00" | "rfc3339"
-    pub datetime_format: Option<String>, // optional: if set, overrides date/time format join
-    pub show_offset: Option<bool>,       // optional: if true and no %z/%:z/%Z, append %:z
 }
 
 /// Load and deserialize the `[preprocessor.gitinfo]` table from `book.toml`.
