@@ -1,0 +1,28 @@
+[book]
+authors = ["CompEng0001"]
+language = "en"
+src = "src"
+title = "mdbook-gitinfo"
+
+[preprocessor.gitinfo]
+enable = true
+header = true
+footer = true
+message.header = "Last updated: <em>{{date}}</em>"
+message.footer = "{{tag}} branch: {{branch}} {{sep}} commit: {{hash}}"
+align.header = "center"
+align.footer = "center"
+margin.header.top = "2em"
+margin.header.bottom = "2em"
+margin.footer = ["2em", "0", "0", "0"]
+font-size = "0.8em"
+separator = "||"
+date-format = "%A %d %B %Y"
+time-format = "@ %H:%M:%S"
+branch = "mdbook-example"
+hyperlink = true
+
+[preprocessor.alerts]
+enable = true
+
+[preprocessor.pagetoc]
