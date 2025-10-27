@@ -112,6 +112,33 @@ pub fn verify_branch(branch: &str, dir: &Path) -> bool {
     get_git_output(["rev-parse", "--verify", branch], dir).is_ok()
 }
 
+
+/// Return the latest tag name, preferring tags reachable from the given branch's HEAD.
+/// Falls back to global (by creator date) when describe fails.
+/// Returns "No tags found" if not tag found
+pub fn latest_tag_for_branch(branch: &str, dir: &std::path::Path) -> String {
+    // Prefer a tag reachable from branch HEAD
+    if let Ok(t) = get_git_output(["describe", "--tags", "--abbrev=0", branch], dir) {
+        if !t.trim().is_empty() {
+            return t;
+        }
+    }
+
+    // Fallback: newest tag by creator date
+    match get_git_output(["tag", "--sort=-creatordate"], dir) {
+        Ok(list) => {
+            if let Some(first) = list.lines().find(|l| !l.trim().is_empty()) {
+                return first.trim().to_string();
+            }
+        }
+        Err(_) => {}
+    }
+
+    "No tags found".to_string()
+}
+
+
+
 #[cfg(test)]
 mod tests {
     use super::*;

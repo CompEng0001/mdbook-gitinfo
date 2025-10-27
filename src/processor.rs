@@ -2,7 +2,7 @@ use crate::chapters::decorate_chapters;
 use crate::config::{load_config, AlignSetting, GitInfoConfig};
 use crate::git;
 use crate::layout::{resolve_align, resolve_margins, resolve_messages};
-use crate::repo::resolve_repo_base;
+use crate::repo::{resolve_repo_base, tag_url};
 use crate::timefmt::format_commit_datetime;
 use crate::renderer::{render_template, style_block, wrap_block};
 use mdbook::book::{Book, BookItem};
@@ -35,6 +35,11 @@ impl Preprocessor for GitInfo {
         let mut branch = cfg.branch.unwrap_or_else(|| "main".to_string());
         let hyperlink = cfg.hyperlink.unwrap_or(false);
         let repo_base = if hyperlink { resolve_repo_base(&ctx.root) } else { None };
+        let resolved_tag = if let Some(t) = cfg.tag.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            t.to_string()
+        } else {
+            git::latest_tag_for_branch(&branch, &ctx.root)
+        };
 
         if !git::verify_branch(&branch, &ctx.root) {
             eprintln!("[mdbook-gitinfo] Warning: Branch '{}' not found, falling back to 'main'", branch);
@@ -59,10 +64,7 @@ impl Preprocessor for GitInfo {
                         &ctx.root,
                     ).unwrap_or_default();
 
-                    let tag = git::get_git_output(
-                        ["describe", "--tags", "--always", "--", &path_str],
-                        &ctx.root,
-                    ).unwrap_or_default();
+                    let tag = resolved_tag.clone();
 
                     let raw_date = git::get_git_output(
                         ["log", "-1", "--format=%cI", &branch, "--", &path_str],
@@ -86,13 +88,24 @@ impl Preprocessor for GitInfo {
                     } else {
                         (short_hash.clone(), branch.clone())
                     };
+                    
+                    let tag_disp = if !tag.is_empty() && !tag.contains("No tags found") && hyperlink {
+                        if let Some(base) = repo_base.as_ref() {
+                            let url = tag_url(base, &tag);
+                            format!(r#"<a href="{}">{}</a>"#, url, tag)
+                        } else {
+                            tag.clone()
+                        }
+                    } else {
+                        "-".to_string()
+                    };
 
                     let render = |tmpl: &str| {
                         render_template(
                             tmpl,
                             &hash_disp,
                             &long_hash,
-                            &tag,
+                            &tag_disp,
                             &formatted_date,
                             &separator,
                             &branch_disp,
