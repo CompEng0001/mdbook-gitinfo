@@ -1,0 +1,56 @@
+name: deploy to github pages
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up mdbook (v0.4.52)
+        run: | 
+          curl -sSL https://github.com/rust-lang/mdBook/releases/download/v0.4.52/mdbook-v0.4.52-x86_64-unknown-linux-gnu.tar.gz | tar -xz
+          chmod +x mdbook
+          mv mdbook ~/.cargo/bin/mdbook
+  
+      - name: Install mdbook-gitinfo (latest)
+        run: |
+          curl -fsSLO https://github.com/CompEng0001/mdbook-gitinfo/releases/latest/download/mdbook-gitinfo-linux.tar.gz
+          tar -xzf mdbook-gitinfo-linux.tar.gz
+          mv mdbook-gitinfo-linux ~/.cargo/bin/mdbook-gitinfo
+
+      - name: Install mdbook-alerts (v.0.8.0)
+        run: |
+          curl -fsSLO https://github.com/lambdalisue/rs-mdbook-alerts/releases/download/v0.8.0/mdbook-alerts-x86_64-unknown-linux-gnu
+          mv mdbook-alerts-x86_64-unknown-linux-gnu ~/.cargo/bin/mdbook-alerts
+          chmod 700 ~/.cargo/bin/mdbook-alerts
+
+      - name: Show mdbook version
+        run: mdbook --version
+      - name: Show gitinfo version
+        run: mdbook-gitinfo --version
+      - name: Show alerts version
+        run: mdbook-alerts --version
+
+      - run: mdbook build docs
+
+      - name: Deploy to github pages
+        uses: crazy-max/ghaction-github-pages@v4
+        with:
+          target_branch: gh-pages
+          build_dir: docs/book
+          jekyll: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
