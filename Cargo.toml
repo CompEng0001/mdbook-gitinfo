@@ -1,6 +1,6 @@
 [package]
 name = "mdbook-gitinfo"
-version = "1.1.0"
+version = "1.1.1"
 edition = "2024"
 authors = ["Seb Blair <s.blair@gre.ac.uk>"]
 description = "An mdBook preprocessor to inject Git commit metadata into generated books"
