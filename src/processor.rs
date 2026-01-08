@@ -4,7 +4,7 @@ use crate::git;
 use crate::layout::{resolve_align, resolve_margins, resolve_messages};
 use crate::repo::{resolve_repo_base, tag_url};
 use crate::timefmt::format_commit_datetime;
-use crate::renderer::{render_template, style_block, wrap_block};
+use crate::renderer::{render_contributors_html, render_template, style_block, wrap_block};
 use mdbook::book::{Book, BookItem};
 use mdbook::errors::Error;
 use mdbook::preprocess::{Preprocessor, PreprocessorContext};
@@ -22,6 +22,21 @@ impl Preprocessor for GitInfo {
     fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book, Error> {
         let cfg = load_config(ctx).unwrap_or_default();
         if !cfg.enable.unwrap_or(true) { return Ok(book); }
+
+        let contributors_enabled = cfg.contributors.unwrap_or(false);
+        const CONTRIBUTORS_TOKEN: &str = "{% contributors %}";
+        let contributor_title = cfg
+            .contributor_title
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or("Contributors");
+
+        let excluded_contributors: std::collections::BTreeSet<String> = cfg
+            .exclude_contributors.clone()
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
+
 
         let show_header = cfg.header.unwrap_or(false);
         let show_footer = cfg.footer.unwrap_or(true);
@@ -45,6 +60,25 @@ impl Preprocessor for GitInfo {
             eprintln!("[mdbook-gitinfo] Warning: Branch '{}' not found, falling back to 'main'", branch);
             branch = "main".to_string();
         }
+
+        let contributors_html: Option<String> = if contributors_enabled {
+            match git::get_contributor_usernames_from_shortlog(&ctx.root) {
+                Ok(users) => {
+                    let filtered: Vec<String> = users
+                        .into_iter()
+                        .filter(|u| !excluded_contributors.contains(u))
+                        .collect();
+
+                    Some(render_contributors_html(&filtered, contributor_title))
+                }
+                Err(e) => {
+                    eprintln!("[mdbook-gitinfo] Warning: unable to get contributors: {e}");
+                    Some(String::new())
+                }
+            }
+        } else {
+            None
+        };
 
         let content_dir = ctx.config.book.src.clone();
 
@@ -99,6 +133,15 @@ impl Preprocessor for GitInfo {
                     } else {
                         "-".to_string()
                     };
+
+                    // Replace token with contributors block (or remove token if disabled).
+                    if ch.content.contains(CONTRIBUTORS_TOKEN) {
+                        if let Some(html) = contributors_html.as_ref() {
+                            ch.content = ch.content.replace(CONTRIBUTORS_TOKEN, html);
+                        } else {
+                            ch.content = ch.content.replace(CONTRIBUTORS_TOKEN, "");
+                        }
+                    }
 
                     let render = |tmpl: &str| {
                         render_template(

@@ -30,6 +30,7 @@ date-format = "%A %d %B %Y"
 time-format = "@ %H:%M:%S"
 branch = "main"
 hyperlink = true
+contributors = true
 
 [preprocessor.alerts]
 enable = true
