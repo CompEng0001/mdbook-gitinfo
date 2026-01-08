@@ -49,3 +49,5 @@ time-format = "@ %H:%M:%S"
 branch = "main"
 hyperlink = true
 ```
+
+{% contributors %}

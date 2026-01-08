@@ -14,6 +14,7 @@ use mdbook::errors::Error;
 use std::ffi::OsStr;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::collections::BTreeSet;
 
 /// Run a Git command and return the trimmed `stdout` output as a [`String`].
 ///
@@ -137,6 +138,62 @@ pub fn latest_tag_for_branch(branch: &str, dir: &std::path::Path) -> String {
     "No tags found".to_string()
 }
 
+
+/// Get a unique, sorted list of GitHub usernames from `git shortlog -sne --all`.
+///
+/// **Assumption (teaching spec):** commit author name equals GitHub username.
+///
+/// We validate the extracted name as a plausible GitHub username.
+pub fn get_contributor_usernames_from_shortlog(dir: &Path) -> Result<Vec<String>, Error> {
+    let raw = get_git_output(["shortlog", "-sne", "--all"], dir)
+        .map_err(|e| Error::msg(format!("unable to get contributors: {e}")))?;
+
+    let mut set = BTreeSet::<String>::new();
+
+    for line in raw.lines() {
+        // Example: "  12\tusername <user@users.noreply.github.com>"
+        let s = line.trim();
+        if s.is_empty() {
+            continue;
+        }
+
+        // Drop count prefix up to first tab
+        let rest = s.split_once('\t').map(|(_, r)| r).unwrap_or(s);
+
+        // Extract name before "<email>"
+        let name = match rest.rfind('<') {
+            Some(idx) => rest[..idx].trim(),
+            None => rest.trim(),
+        };
+
+        if name.is_empty() {
+            continue;
+        }
+
+        // Enforce your requested format: author name == GitHub username
+        if is_plausible_github_username(name) {
+            set.insert(name.to_string());
+        } else {
+            eprintln!(
+                "[mdbook-gitinfo] Warning: contributor name '{name}' is not a valid GitHub username; skipping"
+            );
+        }
+    }
+
+    Ok(set.into_iter().collect())
+}
+
+fn is_plausible_github_username(u: &str) -> bool {
+    // GitHub usernames: 1–39 chars; alnum or hyphen; cannot start/end with hyphen.
+    let len = u.len();
+    if len == 0 || len > 39 {
+        return false;
+    }
+    if u.starts_with('-') || u.ends_with('-') {
+        return false;
+    }
+    u.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+}
 
 
 #[cfg(test)]

@@ -36,3 +36,31 @@ pub fn wrap_block(is_header: bool, style: &str, html: &str) -> String {
         format!(r#"<footer class="gitinfo-footer" style="{}">{}</footer>"#, style, html)
     }
 }
+
+pub fn render_contributors_html(
+    usernames: &[String],
+    title: &str,
+) -> String {
+    if usernames.is_empty() {
+        return String::new();
+    }
+
+    let mut out = String::new();
+    out.push_str(r#"<hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">"#);
+    out.push_str("\n");
+    out.push_str(&format!(r#"<strong>{}</strong>"#, title));
+    out.push_str("\n");
+    out.push_str(r#"<div style="display: flex; gap: 8px; margin-top: 10px;">"#);
+    out.push_str("\n");
+
+    for u in usernames {
+        out.push_str(&format!(
+            r#"<a href="https://github.com/{u}"><img src="https://github.com/{u}.png" width="32px" alt="Contributor {u}" style="border-radius: 50%"></a>"#
+        ));
+        out.push_str("\n");
+    }
+
+    out.push_str(r#"</div>"#);
+    out.push_str("\n</small>\n</div>");
+    out
+}

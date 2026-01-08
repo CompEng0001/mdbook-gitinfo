@@ -19,6 +19,7 @@
 
 use mdbook::errors::Error;
 use mdbook::preprocess::PreprocessorContext;
+use std::collections::BTreeSet;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Default)]
@@ -162,6 +163,23 @@ pub struct GitInfoConfig {
     /// Default: `false`.
     pub hyperlink: Option<bool>,
 
+    /// Git Contributor switch
+    pub contributors: Option<bool>,
+
+    /// Optional title for the contributors block.
+    ///
+    /// Default: "Student Contributors:"
+    #[serde(rename = "contributor-title")]
+    pub contributor_title: Option<String>,
+
+    /// List of contributor author names to exclude.
+    ///
+    /// Matches against the git author name (treated as GitHub username).
+    ///
+    /// Example:
+    /// exclude-contributors = ["github-actions[bot]", "template-author"]
+    #[serde(rename = "exclude-contributors")]
+    pub exclude_contributors: Option<Vec<String>>,
 }
 
 /// Load and deserialize the `[preprocessor.gitinfo]` table from `book.toml`.
