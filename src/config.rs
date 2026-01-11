@@ -172,6 +172,12 @@ pub struct GitInfoConfig {
     #[serde(rename = "contributor-title")]
     pub contributor_title: Option<String>,
 
+    /// Optional message that can be set under the title 
+    /// 
+    /// Default: ""
+    #[serde(rename = "contributor-message")]
+    pub contributor_message: Option<String>,
+
     /// List of contributor author names to exclude.
     ///
     /// Matches against the git author name (treated as GitHub username).

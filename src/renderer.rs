@@ -1,3 +1,17 @@
+use handlebars::{Handlebars,};
+use serde::Serialize;
+
+const CONTRIBUTORS_TEMPLATE: &str = include_str!("../templates/contributor.hbs");
+
+#[derive(Serialize)]
+struct ContributorsCtx<'a> {
+    title: &'a str,
+    // Render raw HTML from config (trusted).
+    message: Option<String>,
+    usernames: &'a [String],
+}
+
+
 /// Render string template with placeholders.
 pub fn render_template(
     template: &str,
@@ -37,30 +51,24 @@ pub fn wrap_block(is_header: bool, style: &str, html: &str) -> String {
     }
 }
 
-pub fn render_contributors_html(
-    usernames: &[String],
+pub fn render_contributors_hbs(
     title: &str,
-) -> String {
-    if usernames.is_empty() {
-        return String::new();
-    }
+    contributor_message: Option<&str>,
+    usernames: &[String],
+) -> Result<String, mdbook::errors::Error> {
+    let mut hb = Handlebars::new();
+    hb.register_template_string("contributors", CONTRIBUTORS_TEMPLATE)
+        .map_err(|e| mdbook::errors::Error::msg(format!("contributors template error: {e}")))?;
 
-    let mut out = String::new();
-    out.push_str(r#"<hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">"#);
-    out.push_str("\n");
-    out.push_str(&format!(r#"<strong>{}</strong>"#, title));
-    out.push_str("\n");
-    out.push_str(r#"<div style="display: flex; gap: 8px; margin-top: 10px;">"#);
-    out.push_str("\n");
+    let ctx = ContributorsCtx {
+        title,
+        message: contributor_message
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| String::from(s.to_string())),
+        usernames,
+    };
 
-    for u in usernames {
-        out.push_str(&format!(
-            r#"<a href="https://github.com/{u}"><img src="https://github.com/{u}.png" width="32px" alt="Contributor {u}" style="border-radius: 50%"></a>"#
-        ));
-        out.push_str("\n");
-    }
-
-    out.push_str(r#"</div>"#);
-    out.push_str("\n</small>\n</div>");
-    out
+    hb.render("contributors", &ctx)
+        .map_err(|e| mdbook::errors::Error::msg(format!("contributors render error: {e}")))
 }

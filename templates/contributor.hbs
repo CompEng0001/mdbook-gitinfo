@@ -1,0 +1,24 @@
+<hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+
+<div class="student-contributor-footnotes">
+  <small>
+    <strong>{{title}}</strong>
+
+    {{#if message}}
+      <div style="margin-top: 10px;">
+        {{{message}}}
+      </div>
+    {{/if}}
+
+    <div style="display: flex; gap: 8px; margin-top: 10px;">
+      {{#each usernames}}
+        <a href="https://github.com/{{this}}">
+          <img src="https://github.com/{{this}}.png"
+               width="32px"
+               alt="Contributor {{this}}"
+               style="border-radius: 50%">
+        </a>
+      {{/each}}
+    </div>
+  </small>
+</div>

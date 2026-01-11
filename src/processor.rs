@@ -4,7 +4,7 @@ use crate::git;
 use crate::layout::{resolve_align, resolve_margins, resolve_messages};
 use crate::repo::{resolve_repo_base, tag_url};
 use crate::timefmt::format_commit_datetime;
-use crate::renderer::{render_contributors_html, render_template, style_block, wrap_block};
+use crate::renderer::{render_contributors_hbs, render_template, style_block, wrap_block};
 use mdbook::book::{Book, BookItem};
 use mdbook::errors::Error;
 use mdbook::preprocess::{Preprocessor, PreprocessorContext};
@@ -30,7 +30,15 @@ impl Preprocessor for GitInfo {
             .as_deref()
             .filter(|s| !s.trim().is_empty())
             .unwrap_or("Contributors");
-
+        
+        // Optional message (HTML) injected via {{{message}}} in the template.
+        // Keep as Option so the template can {{#if message}}.
+        let contributor_message: Option<&str> = cfg
+            .contributor_message
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        
         let excluded_contributors: std::collections::BTreeSet<String> = cfg
             .exclude_contributors.clone()
             .unwrap_or_default()
@@ -68,8 +76,13 @@ impl Preprocessor for GitInfo {
                         .into_iter()
                         .filter(|u| !excluded_contributors.contains(u))
                         .collect();
-
-                    Some(render_contributors_html(&filtered, contributor_title))
+                    match render_contributors_hbs(contributor_title, contributor_message, &filtered) {
+                        Ok(html) => Some(html),
+                        Err(e) => {
+                            eprintln!("[mdbook-gitinfo] Warning: unable to render contributors template: {e}");
+                            Some(String::new())
+                        }
+                    }
                 }
                 Err(e) => {
                     eprintln!("[mdbook-gitinfo] Warning: unable to get contributors: {e}");
