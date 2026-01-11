@@ -1,50 +1,203 @@
 use crate::chapters::decorate_chapters;
-use crate::config::{load_config, AlignSetting, GitInfoConfig};
+use crate::config::{load_config, ContributorsSource};
 use crate::git;
 use crate::layout::{resolve_align, resolve_margins, resolve_messages};
+use crate::renderer::{render_contributors_hbs, render_template, style_block, wrap_block};
 use crate::repo::{resolve_repo_base, tag_url};
 use crate::timefmt::format_commit_datetime;
-use crate::renderer::{render_contributors_hbs, render_template, style_block, wrap_block};
-use mdbook::book::{Book, BookItem};
+use mdbook::book::Book;
 use mdbook::errors::Error;
 use mdbook::preprocess::{Preprocessor, PreprocessorContext};
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
 
 pub struct GitInfo;
 
 impl GitInfo {
-    pub fn new() -> Self { GitInfo }
+    pub fn new() -> Self {
+        GitInfo
+    }
+}
+
+/// Extract all `{% contributors ... %}` tokens and replace them with rendered HTML.
+/// Ignores fence blocks
+///
+/// Token forms:
+/// - `{% contributors %}`
+/// - `{% contributors a b c %}` (only honoured when contributors-source = "inline")
+fn replace_contributors_tokens(
+    input: &str,
+    source: ContributorsSource,
+    contributors_html_global: &str,
+    inline_renderer: &dyn Fn(&[String]) -> String,
+) -> String {
+    let mut out = String::with_capacity(input.len());
+
+    // fence tracking: None = not in a fenced block
+    let mut in_fence = false;
+    let mut fence_ch: char = '\0'; // '`' or '~'
+    let mut fence_len: usize = 0;
+
+    // Iterate line-by-line (preserving newlines) so we can reliably skip fenced regions.
+    for line in input.split_inclusive('\n') {
+        // Detect fence open/close (CommonMark allows up to 3 leading spaces; tolerate tabs too)
+        let trimmed = line.trim_start_matches(|c| c == ' ' || c == '\t');
+
+        if !trimmed.is_empty() {
+            let first = trimmed.chars().next().unwrap();
+
+            // Count consecutive backticks/tildes at start of trimmed line
+            if first == '`' || first == '~' {
+                let mut count = 0usize;
+                for c in trimmed.chars() {
+                    if c == first {
+                        count += 1;
+                    } else {
+                        break;
+                    }
+                }
+
+                if count >= 3 {
+                    if !in_fence {
+                        // Opening a fence
+                        in_fence = true;
+                        fence_ch = first;
+                        fence_len = count;
+                        out.push_str(line);
+                        continue;
+                    } else if first == fence_ch && count >= fence_len {
+                        // Closing the current fence (must match char, length >= opening)
+                        in_fence = false;
+                        fence_ch = '\0';
+                        fence_len = 0;
+                        out.push_str(line);
+                        continue;
+                    }
+                }
+            }
+        }
+
+        // If inside a fenced code block, do not evaluate tokens.
+        if in_fence {
+            out.push_str(line);
+            continue;
+        }
+
+        // Outside fences: run your existing token replacement logic on this line.
+        let mut i = 0usize;
+
+        while i < line.len() {
+            // Find "{%"
+            let Some(rel_start) = line[i..].find("{%") else {
+                out.push_str(&line[i..]);
+                break;
+            };
+            let start = i + rel_start;
+            out.push_str(&line[i..start]);
+
+            // Find closing "%}"
+            let Some(end_rel) = line[start..].find("%}") else {
+                out.push_str(&line[start..]);
+                break;
+            };
+            let end = start + end_rel + 2;
+
+            let token_body = &line[start + 2..end - 2];
+            let token = token_body.trim();
+
+            if !token.starts_with("contributors") {
+                out.push_str(&line[start..end]);
+                i = end;
+                continue;
+            }
+
+            let mut parts = token.split_whitespace();
+            let _kw = parts.next();
+            let args: Vec<String> = parts
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+
+            match source {
+                ContributorsSource::Inline => {
+                    if args.is_empty() {
+                        eprintln!("[mdbook-gitinfo] Warning: contributors-source is 'inline' but no usernames provided in '{{% contributors %}}'");
+                        // render nothing
+                    } else {
+                        let html = inline_renderer(&args);
+                        out.push_str(html.trim_start());
+                    }
+                }
+                ContributorsSource::Git | ContributorsSource::File => {
+                    if !args.is_empty() {
+                        eprintln!("[mdbook-gitinfo] Warning: inline contributors list ignored because contributors-source is not 'inline'");
+                    }
+                    out.push_str(contributors_html_global.trim_start());
+                }
+            }
+
+            i = end;
+        }
+    }
+
+    out
+}
+
+fn parse_contributors_file(path: &std::path::Path) -> Vec<String> {
+    let Ok(raw) = fs::read_to_string(path) else {
+        return vec![];
+    };
+    raw.lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .map(|l| {
+            l.strip_prefix("- ")
+                .or_else(|| l.strip_prefix("* "))
+                .unwrap_or(l)
+        })
+        .map(|l| l.trim().to_string())
+        .collect()
 }
 
 impl Preprocessor for GitInfo {
-    fn name(&self) -> &str { "gitinfo" }
+    fn name(&self) -> &str {
+        "gitinfo"
+    }
 
     fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book, Error> {
         let cfg = load_config(ctx).unwrap_or_default();
-        if !cfg.enable.unwrap_or(true) { return Ok(book); }
+        if !cfg.enable.unwrap_or(true) {
+            return Ok(book);
+        }
 
         let contributors_enabled = cfg.contributors.unwrap_or(false);
-        const CONTRIBUTORS_TOKEN: &str = "{% contributors %}";
-        let contributor_title = cfg
-            .contributor_title
+        let contributors_source = cfg.contributors_source.unwrap_or_default();
+        let contributors_file = cfg
+            .contributors_file
+            .clone()
+            .unwrap_or_else(|| "CONTRIBUTORS.md".to_string());
+
+        let contributors_title = cfg
+            .contributors_title
             .as_deref()
             .filter(|s| !s.trim().is_empty())
             .unwrap_or("Contributors");
-        
+
         // Optional message (HTML) injected via {{{message}}} in the template.
         // Keep as Option so the template can {{#if message}}.
-        let contributor_message: Option<&str> = cfg
-            .contributor_message
+        let contributors_message: Option<&str> = cfg
+            .contributors_message
             .as_deref()
             .map(str::trim)
             .filter(|s| !s.is_empty());
-        
+
         let excluded_contributors: std::collections::BTreeSet<String> = cfg
-            .exclude_contributors.clone()
+            .contributors_exclude
+            .clone()
             .unwrap_or_default()
             .into_iter()
             .collect();
 
+        let contributors_max_visible = cfg.contributors_max_visible.unwrap_or(24);
 
         let show_header = cfg.header.unwrap_or(false);
         let show_footer = cfg.footer.unwrap_or(true);
@@ -57,26 +210,105 @@ impl Preprocessor for GitInfo {
         let time_format = cfg.time_format.as_deref().unwrap_or("%H:%M:%S");
         let mut branch = cfg.branch.unwrap_or_else(|| "main".to_string());
         let hyperlink = cfg.hyperlink.unwrap_or(false);
-        let repo_base = if hyperlink { resolve_repo_base(&ctx.root) } else { None };
-        let resolved_tag = if let Some(t) = cfg.tag.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
-            t.to_string()
+        let repo_base = if hyperlink {
+            resolve_repo_base(&ctx.root)
         } else {
-            git::latest_tag_for_branch(&branch, &ctx.root)
+            None
         };
+        let resolved_tag =
+            if let Some(t) = cfg.tag.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                t.to_string()
+            } else {
+                git::latest_tag_for_branch(&branch, &ctx.root)
+            };
 
         if !git::verify_branch(&branch, &ctx.root) {
-            eprintln!("[mdbook-gitinfo] Warning: Branch '{}' not found, falling back to 'main'", branch);
+            eprintln!(
+                "[mdbook-gitinfo] Warning: Branch '{}' not found, falling back to 'main'",
+                branch
+            );
             branch = "main".to_string();
         }
 
-        let contributors_html: Option<String> = if contributors_enabled {
-            match git::get_contributor_usernames_from_shortlog(&ctx.root) {
-                Ok(users) => {
+        // Pre-compute the global contributors HTML for non-inline sources.
+        // Inline source is resolved per token instance (args).
+        let contributors_html_global: Option<String> = if contributors_enabled {
+            match contributors_source {
+                ContributorsSource::Git => {
+                    match git::get_contributor_usernames_from_shortlog(&ctx.root) {
+                        Ok(users) => {
+                            let filtered: Vec<String> = users
+                                .into_iter()
+                                .filter(|u| !excluded_contributors.contains(u))
+                                .collect();
+                            let visible: Vec<String> = filtered
+                                .iter()
+                                .take(contributors_max_visible)
+                                .cloned()
+                                .collect();
+                            let hidden: Vec<String> = filtered
+                                .iter()
+                                .skip(contributors_max_visible)
+                                .cloned()
+                                .collect();
+
+                            match render_contributors_hbs(
+                                contributors_title,
+                                contributors_message,
+                                &visible,
+                                &hidden,
+                            ) {
+                                Ok(html) => Some(html),
+                                Err(e) => {
+                                    eprintln!("[mdbook-gitinfo] Warning: unable to render contributors template: {e}");
+                                    Some(String::new())
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("[mdbook-gitinfo] Warning: unable to get contributors from git: {e}");
+                            Some(String::new())
+                        }
+                    }
+                }
+                ContributorsSource::File => {
+                    let file_path = ctx.root.join(&contributors_file);
+                    let users = parse_contributors_file(&file_path);
+                    if users.is_empty() {
+                        eprintln!("[mdbook-gitinfo] Warning: contributors-source is 'file' but no usernames found in {}", file_path.display());
+                    }
+                    eprintln!(
+                        "[mdbook-gitinfo] contributors(file): path={} raw_lines={}",
+                        file_path.display(),
+                        users.len(),
+                    );
                     let filtered: Vec<String> = users
                         .into_iter()
                         .filter(|u| !excluded_contributors.contains(u))
                         .collect();
-                    match render_contributors_hbs(contributor_title, contributor_message, &filtered) {
+
+                    let visible: Vec<String> = filtered
+                        .iter()
+                        .take(contributors_max_visible)
+                        .cloned()
+                        .collect();
+                    let hidden: Vec<String> = filtered
+                        .iter()
+                        .skip(contributors_max_visible)
+                        .cloned()
+                        .collect();
+
+                    eprintln!(
+                        "[mdbook-gitinfo] contributors(file): path={} filtered={}",
+                        file_path.display(),
+                        filtered.len()
+                    );
+                    match render_contributors_hbs(
+                        contributors_title,
+                        contributors_message,
+                        &visible,
+                        &hidden,
+                    ) {
                         Ok(html) => Some(html),
                         Err(e) => {
                             eprintln!("[mdbook-gitinfo] Warning: unable to render contributors template: {e}");
@@ -84,8 +316,8 @@ impl Preprocessor for GitInfo {
                         }
                     }
                 }
-                Err(e) => {
-                    eprintln!("[mdbook-gitinfo] Warning: unable to get contributors: {e}");
+                ContributorsSource::Inline => {
+                    // Inline is per-token; global HTML is empty.
                     Some(String::new())
                 }
             }
@@ -135,7 +367,7 @@ impl Preprocessor for GitInfo {
                     } else {
                         (short_hash.clone(), branch.clone())
                     };
-                    
+
                     let tag_disp = if !tag.is_empty() && !tag.contains("No tags found") && hyperlink {
                         if let Some(base) = repo_base.as_ref() {
                             let url = tag_url(base, &tag);
@@ -147,13 +379,41 @@ impl Preprocessor for GitInfo {
                         "-".to_string()
                     };
 
-                    // Replace token with contributors block (or remove token if disabled).
-                    if ch.content.contains(CONTRIBUTORS_TOKEN) {
-                        if let Some(html) = contributors_html.as_ref() {
-                            ch.content = ch.content.replace(CONTRIBUTORS_TOKEN, html);
-                        } else {
-                            ch.content = ch.content.replace(CONTRIBUTORS_TOKEN, "");
-                        }
+                    if contributors_enabled {
+                        let html_global = contributors_html_global.as_deref().unwrap_or("");
+
+                        let inline_renderer = |args: &[String]| -> String {
+                            let filtered: Vec<String> = args.iter()
+                                .cloned()
+                                .filter(|u| !excluded_contributors.contains(u))
+                                .collect();
+
+                            let visible: Vec<String> = filtered.iter().take(contributors_max_visible).cloned().collect();
+                            let hidden: Vec<String> = filtered.iter().skip(contributors_max_visible).cloned().collect();
+
+                            match render_contributors_hbs(contributors_title, contributors_message, &visible, &hidden) {
+                                Ok(h) => h,
+                                Err(e) => {
+                                    eprintln!("[mdbook-gitinfo] Warning: unable to render contributors template: {e}");
+                                    String::new()
+                                }
+                            }
+                        };
+
+                        ch.content = replace_contributors_tokens(
+                            &ch.content,
+                            contributors_source,
+                            html_global,
+                            &inline_renderer,
+                        );
+                    } else {
+                        // If contributors disabled, strip tokens entirely.
+                        ch.content = replace_contributors_tokens(
+                            &ch.content,
+                            contributors_source,
+                            "",
+                            &|_args| String::new(),
+                        );
                     }
 
                     let render = |tmpl: &str| {
@@ -195,5 +455,7 @@ impl Preprocessor for GitInfo {
         Ok(book)
     }
 
-    fn supports_renderer(&self, renderer: &str) -> bool { renderer == "html" }
+    fn supports_renderer(&self, renderer: &str) -> bool {
+        renderer == "html"
+    }
 }

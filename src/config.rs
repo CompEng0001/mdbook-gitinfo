@@ -19,7 +19,6 @@
 
 use mdbook::errors::Error;
 use mdbook::preprocess::PreprocessorContext;
-use std::collections::BTreeSet;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Default)]
@@ -49,14 +48,16 @@ pub enum MarginSetting {
 }
 
 impl Default for MarginSetting {
-    fn default() -> Self { MarginSetting::One("0".to_string()) }
+    fn default() -> Self {
+        MarginSetting::One("0".to_string())
+    }
 }
 
 #[derive(Debug, Deserialize, Default)]
 pub struct MarginConfig {
     pub header: Option<MarginSetting>,
     pub footer: Option<MarginSetting>,
-    pub both:   Option<MarginSetting>,
+    pub both: Option<MarginSetting>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -68,12 +69,28 @@ pub enum AlignSetting {
     Split {
         header: Option<String>,
         footer: Option<String>,
-        both:   Option<String>,
+        both: Option<String>,
     },
 }
 
 impl Default for AlignSetting {
-    fn default() -> Self { AlignSetting::One("center".to_string()) }
+    fn default() -> Self {
+        AlignSetting::One("center".to_string())
+    }
+}
+
+#[derive(Debug, Deserialize, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+pub enum ContributorsSource {
+    Git,
+    File,
+    Inline,
+}
+
+impl Default for ContributorsSource {
+    fn default() -> Self {
+        ContributorsSource::Git
+    }
 }
 
 /// Represents the user-defined configuration options under `[preprocessor.gitinfo]`
@@ -82,7 +99,7 @@ impl Default for AlignSetting {
 /// Each field is optional; defaults are handled in the preprocessor logic.
 /// The configuration allows users to control how commit metadata is formatted
 /// and rendered in the generated book.
-#[derive(Debug, Deserialize,Default)]
+#[derive(Debug, Deserialize, Default)]
 pub struct GitInfoConfig {
     /// Gate to turn the preprocessor on/off without removing the section.
     /// Default: true (when omitted).
@@ -90,7 +107,7 @@ pub struct GitInfoConfig {
 
     /// The formatting style of the git data (currently unused, reserved for future use).
     pub format: Option<String>,
-    
+
     /// Template string defining how git metadata is rendered.
     ///
     /// Supported placeholders:
@@ -101,7 +118,7 @@ pub struct GitInfoConfig {
     /// - `{{sep}}` → separator string
     /// (Deprecated) Old single template. If present, used as a fallback for footer_message.
     pub template: Option<String>,
-    
+
     // Placement switches
     pub header: Option<bool>,
     pub footer: Option<bool>,
@@ -134,11 +151,10 @@ pub struct GitInfoConfig {
     #[serde(rename = "time-format")]
     pub time_format: Option<String>,
 
-
-    pub timezone: Option<String>,        // "local" | "utc" | "source" | "fixed:+01:00" | "rfc3339"
+    pub timezone: Option<String>, // "local" | "utc" | "source" | "fixed:+01:00" | "rfc3339"
     pub datetime_format: Option<String>, // optional: if set, overrides date/time format join
-    pub show_offset: Option<bool>,       // optional: if true and no %z/%:z/%Z, append %:z
-    
+    pub show_offset: Option<bool>, // optional: if true and no %z/%:z/%Z, append %:z
+
     /// Git branch from which to retrieve commit history.
     ///
     /// Default: `"main"`.
@@ -150,7 +166,7 @@ pub struct GitInfoConfig {
     /// - [preprocessor.gitinfo.align] both = "center"
     pub align: Option<AlignSetting>,
 
-    /// CSS option to adjust margin between body and footer 
+    /// CSS option to adjust margin between body and footer
     pub margin: Option<MarginConfig>,
 
     // explicit tag override (if set, use this instead of auto-detect)
@@ -159,7 +175,7 @@ pub struct GitInfoConfig {
     /// CSS option provides a hyperlink to the respective branch and commit  
     /// in the footer
     ///
-    /// Options: "true | false" 
+    /// Options: "true | false"
     /// Default: `false`.
     pub hyperlink: Option<bool>,
 
@@ -168,24 +184,44 @@ pub struct GitInfoConfig {
 
     /// Optional title for the contributors block.
     ///
-    /// Default: "Student Contributors:"
-    #[serde(rename = "contributor-title")]
-    pub contributor_title: Option<String>,
+    /// Default: "Contributors:"
+    #[serde(rename = "contributors-title")]
+    pub contributors_title: Option<String>,
 
-    /// Optional message that can be set under the title 
-    /// 
+    /// Optional message that can be set under the title
+    ///
     /// Default: ""
-    #[serde(rename = "contributor-message")]
-    pub contributor_message: Option<String>,
+    #[serde(rename = "contributors-message")]
+    pub contributors_message: Option<String>,
+
+    /// Where to source contributors from.
+    ///
+    /// Options: "git" (default), "file", "inline"
+    ///
+    /// - git: derive from `git shortlog -sne --all`
+    /// - file: read from CONTRIBUTORS.md (or contributors-file)
+    /// - inline: only `{% contributors a b %}` tokens are used
+    #[serde(rename = "contributors-source")]
+    pub contributors_source: Option<ContributorsSource>,
+
+    /// File path (relative to book root) used when contributors-source = "file".
+    /// Default: "CONTRIBUTORS.md"
+    #[serde(rename = "contributors-file")]
+    pub contributors_file: Option<String>,
 
     /// List of contributor author names to exclude.
     ///
     /// Matches against the git author name (treated as GitHub username).
     ///
     /// Example:
-    /// exclude-contributors = ["github-actions[bot]", "template-author"]
-    #[serde(rename = "exclude-contributors")]
-    pub exclude_contributors: Option<Vec<String>>,
+    /// contributors-exclude = ["github-actions[bot]", "template-author"]
+    #[serde(rename = "contributors-exclude")]
+    pub contributors_exclude: Option<Vec<String>>,
+
+    /// Maximum number of contributor avatars shown before collapsing into a "Show all" expander.
+    /// Default: 24
+    #[serde(rename = "contributors-max-visible")]
+    pub contributors_max_visible: Option<usize>,
 }
 
 /// Load and deserialize the `[preprocessor.gitinfo]` table from `book.toml`.
@@ -229,7 +265,10 @@ mod tests {
         let parsed: toml::Value = toml::from_str(toml).unwrap();
         let mut config = Config::default();
         config.set("preprocessor.gitinfo", parsed);
-        mdbook::preprocess::PreprocessorContext { config, ..Default::default() }
+        mdbook::preprocess::PreprocessorContext {
+            config,
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -247,9 +286,14 @@ mod tests {
             [align]
             both = "center"
             header = "left"
-        "#)).unwrap();
+        "#))
+        .unwrap();
         match c.align.unwrap() {
-            AlignSetting::Split { header, footer, both } => {
+            AlignSetting::Split {
+                header,
+                footer,
+                both,
+            } => {
                 assert_eq!(header.as_deref(), Some("left"));
                 assert_eq!(footer, None);
                 assert_eq!(both.as_deref(), Some("center"));
@@ -264,7 +308,8 @@ mod tests {
             [message]
             both = "D: {{date}}"
             header = "H: {{date}}"
-        "#)).unwrap();
+        "#))
+        .unwrap();
         assert_eq!(c.message.unwrap().header.unwrap(), "H: {{date}}");
     }
 }
