@@ -1,19 +1,19 @@
 //! mdbook-gitinfo: inject Git metadata into mdBook chapters.
 
-mod processor;
-mod timefmt;
-mod renderer;
-mod layout;
-mod repo;
 mod chapters;
+mod layout;
+mod processor;
+mod renderer;
+mod repo;
+mod timefmt;
 
 pub use mdbook_gitinfo::{config, git};
 
-use clap::{ArgMatches, Command, arg, command};
+use clap::{arg, command, ArgMatches, Command};
 use mdbook::errors::Error;
 use mdbook::preprocess::{CmdPreprocessor, Preprocessor};
-use std::{io, process};
 use processor::GitInfo;
+use std::{io, process};
 
 fn handle_preprocessing(pre: &dyn Preprocessor) -> Result<(), Error> {
     let (ctx, book) = CmdPreprocessor::parse_input(io::stdin())?;
@@ -31,8 +31,14 @@ fn handle_preprocessing(pre: &dyn Preprocessor) -> Result<(), Error> {
 }
 
 fn handle_supports(pre: &dyn Preprocessor, sub_args: &ArgMatches) -> ! {
-    let renderer = sub_args.get_one::<String>("renderer").expect("Renderer required");
-    process::exit(if pre.supports_renderer(renderer) { 0 } else { 1 });
+    let renderer = sub_args
+        .get_one::<String>("renderer")
+        .expect("Renderer required");
+    process::exit(if pre.supports_renderer(renderer) {
+        0
+    } else {
+        1
+    });
 }
 
 fn main() {

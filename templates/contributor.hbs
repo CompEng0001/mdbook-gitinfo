@@ -1,24 +1,78 @@
-<hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
-
 <div class="student-contributor-footnotes">
-  <small>
-    <strong>{{title}}</strong>
+<style>
+/* Make details/hidden avatars participate in the SAME flex wrap */
+.student-contributor-footnotes .contributors-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; max-width: 100%; align-items: center; }
+.student-contributor-footnotes details.contributors-more { display: contents; }
 
-    {{#if message}}
-      <div style="margin-top: 10px;">
-        {{{message}}}
-      </div>
-    {{/if}}
+/* Hide the hidden avatars when not expanded */
+.student-contributor-footnotes details.contributors-more:not([open]) .contributors-hidden { display: none; }
+/* When expanded, "unwrap" the hidden wrapper so its children become flex items */
+.student-contributor-footnotes details.contributors-more[open] .contributors-hidden { display: contents; }
 
-    <div style="display: flex; gap: 8px; margin-top: 10px;">
-      {{#each usernames}}
-        <a href="https://github.com/{{this}}">
-          <img src="https://github.com/{{this}}.png"
-               width="32px"
-               alt="Contributor {{this}}"
-               style="border-radius: 50%">
-        </a>
-      {{/each}}
-    </div>
-  </small>
+/* Make the summary look like a subtle "more" chip (no default marker) */
+.student-contributor-footnotes details.contributors-more > summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+.student-contributor-footnotes details.contributors-more > summary::-webkit-details-marker { display: none; }
+.student-contributor-footnotes .contributors-more-chip {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid #ddd;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  line-height: 1;
+  user-select: none;
+}
+</style>
+
+<h2>{{title}}</h2>
+
+{{#if message}}
+<div style="margin-top: 10px;">
+{{{message}}}
+</div>
+{{/if}}
+
+<div class="contributors-row">
+{{#each usernames_visible}}
+<a href="https://github.com/{{this}}">
+<img src="https://github.com/{{this}}.png"
+     width="32px"
+     height="32px"
+     loading="lazy"
+     alt="Contributor {{this}}"
+     style="border-radius: 50%">
+</a>
+{{/each}}
+
+{{#if hidden_count}}
+<details class="contributors-more">
+  <summary>
+    <span class="contributors-more-chip" title="Show/hide all contributors">
+      {{hidden_count}}+
+    </span>
+  </summary>
+
+  <span class="contributors-hidden">
+    {{#each usernames_hidden}}
+    <a href="https://github.com/{{this}}">
+      <img src="https://github.com/{{this}}.png"
+           width="32px"
+           height="32px"
+           loading="lazy"
+           alt="Contributor {{this}}"
+           style="border-radius: 50%">
+    </a>
+    {{/each}}
+  </span>
+</details>
+{{/if}}
+</div>
+
 </div>

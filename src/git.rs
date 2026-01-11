@@ -11,10 +11,10 @@
 //! - [`verify_branch`] — Convenience wrapper to check branch existence.
 
 use mdbook::errors::Error;
+use std::collections::BTreeSet;
 use std::ffi::OsStr;
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::collections::BTreeSet;
 
 /// Run a Git command and return the trimmed `stdout` output as a [`String`].
 ///
@@ -113,7 +113,6 @@ pub fn verify_branch(branch: &str, dir: &Path) -> bool {
     get_git_output(["rev-parse", "--verify", branch], dir).is_ok()
 }
 
-
 /// Return the latest tag name, preferring tags reachable from the given branch's HEAD.
 /// Falls back to global (by creator date) when describe fails.
 /// Returns "No tags found" if not tag found
@@ -138,53 +137,35 @@ pub fn latest_tag_for_branch(branch: &str, dir: &std::path::Path) -> String {
     "No tags found".to_string()
 }
 
-
-/// Get a unique, sorted list of GitHub usernames from `git shortlog -sne --all`.
+/// Extract a GitHub username from a GitHub noreply email address.
 ///
-/// **Assumption (teaching spec):** commit author name equals GitHub username.
-///
-/// We validate the extracted name as a plausible GitHub username.
-pub fn get_contributor_usernames_from_shortlog(dir: &Path) -> Result<Vec<String>, Error> {
-    let raw = get_git_output(["shortlog", "-sne", "--all"], dir)
-        .map_err(|e| Error::msg(format!("unable to get contributors: {e}")))?;
-
-    let mut set = BTreeSet::<String>::new();
-
-    for line in raw.lines() {
-        // Example: "  12\tusername <user@users.noreply.github.com>"
-        let s = line.trim();
-        if s.is_empty() {
-            continue;
-        }
-
-        // Drop count prefix up to first tab
-        let rest = s.split_once('\t').map(|(_, r)| r).unwrap_or(s);
-
-        // Extract name before "<email>"
-        let name = match rest.rfind('<') {
-            Some(idx) => rest[..idx].trim(),
-            None => rest.trim(),
-        };
-
-        if name.is_empty() {
-            continue;
-        }
-
-        // Enforce your requested format: author name == GitHub username
-        if is_plausible_github_username(name) {
-            set.insert(name.to_string());
-        } else {
-            eprintln!(
-                "[mdbook-gitinfo] Warning: contributor name '{name}' is not a valid GitHub username; skipping"
-            );
-        }
+/// Supported patterns:
+/// - `username@users.noreply.github.com`
+/// - `12345+username@users.noreply.github.com`
+fn github_username_from_email(email: &str) -> Option<String> {
+    const SUFFIX: &str = "@users.noreply.github.com";
+    if !email.ends_with(SUFFIX) {
+        return None;
     }
-
-    Ok(set.into_iter().collect())
+    let local = &email[..email.len() - SUFFIX.len()];
+    let local = local.trim();
+    if local.is_empty() {
+        return None;
+    }
+    // Strip optional numeric prefix: "12345+username"
+    let username = match local.split_once('+') {
+        Some((_id, u)) if !u.trim().is_empty() => u.trim(),
+        _ => local,
+    };
+    if username.is_empty() {
+        None
+    } else {
+        Some(username.to_string())
+    }
 }
 
 fn is_plausible_github_username(u: &str) -> bool {
-    // GitHub usernames: 1–39 chars; alnum or hyphen; cannot start/end with hyphen.
+    // Conservative subset: 1–39 chars of [A-Za-z0-9-], not starting/ending with '-'
     let len = u.len();
     if len == 0 || len > 39 {
         return false;
@@ -195,6 +176,60 @@ fn is_plausible_github_username(u: &str) -> bool {
     u.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
 }
 
+/// Retrieve contributor usernames from `git shortlog -sne --all`.
+///
+/// Strategy:
+/// 1) Prefer the *author name* if it looks like a GitHub username.
+/// 2) Otherwise, fallback to extracting a username from GitHub noreply email.
+///
+/// Returns a unique, sorted list of inferred GitHub usernames.
+pub fn get_contributor_usernames_from_shortlog(dir: &Path) -> Result<Vec<String>, Error> {
+    let raw = get_git_output(["shortlog", "-sne", "--all"], dir)
+        .map_err(|e| Error::msg(format!("unable to get contributors: {e}")))?;
+
+    let mut set = BTreeSet::<String>::new();
+
+    for line in raw.lines() {
+        // Expected: "  42  Name <email>"
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        // Split count from rest
+        let mut parts = line.splitn(2, char::is_whitespace);
+        let _count_str = parts.next().unwrap_or("");
+        let rest = parts.next().unwrap_or("").trim();
+        if rest.is_empty() {
+            continue;
+        }
+
+        // Extract name and optional email
+        let (name, email) = if let Some((n, e)) = rest.rsplit_once('<') {
+            let email = e.trim_end_matches('>').trim();
+            (n.trim(), Some(email))
+        } else {
+            (rest, None)
+        };
+
+        // 1) Prefer author name (if plausible)
+        if !name.is_empty() && is_plausible_github_username(name) {
+            set.insert(name.to_string());
+            continue;
+        }
+
+        // 2) Fallback to email-derived username (GitHub noreply only)
+        if let Some(email) = email {
+            if let Some(u) = github_username_from_email(email) {
+                if is_plausible_github_username(&u) {
+                    set.insert(u);
+                }
+            }
+        }
+    }
+
+    Ok(set.into_iter().collect())
+}
 
 #[cfg(test)]
 mod tests {

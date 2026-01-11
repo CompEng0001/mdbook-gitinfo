@@ -13,6 +13,7 @@ Both styles merge as expected, but using one style consistently improves readabi
 | `footer`    | `bool`   | `true`   | Render metadata at the bottom of each page.                                          |
 | `branch`    | `string` | `"main"` | Branch to query for commit data.                                                     |
 | `hyperlink` | `bool`   | `false`  | Turns commit hash and branch into clickable links (see [Hyperlinks](#4-hyperlinks)). |
+| `contributors` |`bool` | `false`  | Renders Contributors section (see [Contributors](#6-contributors)).
 
 
 ## 2. Message Templates
@@ -199,7 +200,184 @@ Controls how commit timestamps are rendered.
 > [!IMPORTANT]
 > The offset is always applied, but not shown unless you include `%z`, `%:z`, or `%Z` in your time-format
 
-## 6. Examples
+## 6. Contributors
+
+Optionally render a contributors block, showing GitHub avatars and profile links for users associated with the book.
+
+This feature is **opt-in** and disabled by default.
+
+```toml
+[preprocessor.gitinfo]
+contributors = true
+```
+
+Contributors are rendered wherever the token appears:
+
+```md
+{% contributors %}
+```
+
+### 6.1 Contributor Sources
+The source of contributor data is controlled via `contributors-source`.
+
+```toml
+[preprocessor.gitinfo]
+contributors = true
+contributors-source = "git"
+```
+
+Supported values:
+
+| Value    | Description                                                                    |
+| -------- | ------------------------------------------------------------------------------ |
+| `git`    | *(default)* Derive contributors from git history using `git shortlog`.         |
+| `file`   | Read contributors from a file at the repository root (e.g. `CONTRIBUTORS.md`). |
+| `inline` | Contributors are explicitly listed in the `{% contributors %}` token.          |
+
+
+If `contributors-source` is omitted, it defaults to `"git"`.
+
+
+### 6.2 `contributors-source = "git"` (default)
+
+Contributors are inferred from the repository’s git history:
+
+```sh
+git shortlog -sne --all
+```
+
+The author name is treated as a GitHub username and used to construct:
+
+- Profile link: `https://github.com/<username>`
+
+- Avatar image: `https://github.com/<username>.png`
+
+> [!NOTE]
+> This approach assumes commit author names match GitHub usernames.
+> While this is common (and recommended), it is a best-effort heuristic.
+
+**Token usage**
+
+```md
+{% contributors %}
+```
+
+Inline usernames are ignored in this mode:
+
+```md
+{% contributors alice bob %}
+```
+
+A warning is emitted if arguments are provided.
+
+### 6.3 `contributors-source = "file"`
+
+Contributors are read from a file located at the repository root
+(the same level as `book.toml` or `README.md`).
+
+```toml
+[preprocessor.gitinfo]
+contributors = true
+contributors-source = "file"
+contributors-file = "CONTRIBUTORS.md"
+```
+
+Default file name (if omitted):
+
+```md
+CONTRIBUTORS.md
+```
+
+**Accepted formats**
+
+Each contributor should appear on its own line:
+
+```
+name 
+name2
+name3
+```
+
+Bullet prefixes are also accepted:
+
+```
+- name 
+- name2
+- name3
+```
+
+Blank lines are ignored.
+
+### 6.4 `contributors-source = "inline"`
+
+Contributors are specified **directly in the token**.
+
+```toml
+[preprocessor.gitinfo]
+contributors = true
+contributors-source = "inline"
+```
+
+Usage:
+```md
+{% contributors name name2 name3 %}
+```
+
+If no usernames are provided, nothing is rendered and a warning is emitted.
+
+This mode is intended for:
+
+- curated attribution
+
+- future per-page contributor control
+
+- repositories where git history is not representative
+
+### 6.5 Title, Message, and Exclusions
+
+**Contributor Title**
+
+```toml
+[preprocessor.gitinfo]
+contributor-title = "Contributors"
+```
+
+Default: `"Contributors"`
+
+**Optional Message**
+
+An optional message can be rendered above the avatars.
+This supports raw HTML.
+
+```toml
+[preprocessor.gitinfo]
+contributor-message = "<em>Thanks to all the contributors</em>"
+```
+
+**Excluding Contributors**
+
+Usernames can be excluded regardless of source:
+
+```toml
+[preprocessor.gitinfo]
+exclude-contributors = ["github-actions[bot]", "dependabot"]
+```
+
+This is useful for filtering automation accounts or CI bots.
+
+### 6.6 Rendering Behaviour
+
+- The contributors block is rendered as raw HTML
+
+- It is compatible with the HTML renderer
+
+- If contributors are enabled but no valid users are found:
+
+    - nothing is rendered
+
+    - a warning is emitted
+
+## 7. Examples
 
 ### Example 1 – Simple Footer
 
