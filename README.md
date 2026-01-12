@@ -33,6 +33,7 @@ An <a href="https://github.com/rust-lang/mdBook">mdBook</a> preprocessor that in
 - Optional **hyperlinks** for commit and branch to your remote provider.
 - Branch verification with graceful fallback to `"main"`.
 - Only the `html` renderer is supported.
+- Display list of contributors via git, file, and inline methods
 
 ---
 
