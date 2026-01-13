@@ -1,8 +1,8 @@
-use mdbook::book::BookItem;
+use mdbook_preprocessor::book::{BookItem,Chapter};
 
 pub fn decorate_chapters<F>(item: &mut BookItem, decorate: &F)
 where
-    F: Fn(&mut mdbook::book::Chapter),
+    F: Fn(&mut Chapter),
 {
     if let BookItem::Chapter(ch) = item {
         decorate(ch);

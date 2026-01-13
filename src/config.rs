@@ -17,8 +17,8 @@
 //! branch      = "main"
 //! ```
 
-use mdbook::errors::Error;
-use mdbook::preprocess::PreprocessorContext;
+use mdbook_preprocessor::errors::Error;
+use mdbook_preprocessor::PreprocessorContext;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Default)]
@@ -251,15 +251,15 @@ pub struct GitInfoConfig {
 /// ```
 pub fn load_config(ctx: &PreprocessorContext) -> Result<GitInfoConfig, Error> {
     ctx.config
-        .get("preprocessor.gitinfo")
-        .and_then(|t| t.clone().try_into().ok())
+        .get::<GitInfoConfig>("preprocessor.gitinfo")?
         .ok_or_else(|| Error::msg("Missing or invalid [preprocessor.gitinfo] config"))
 }
+
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mdbook::Config;
+    use mdbook_preprocessor::config::Config;
 
     fn ctx(toml: &str) -> mdbook::preprocess::PreprocessorContext {
         let parsed: toml::Value = toml::from_str(toml).unwrap();

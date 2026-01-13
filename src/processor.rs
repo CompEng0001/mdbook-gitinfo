@@ -5,9 +5,9 @@ use crate::layout::{resolve_align, resolve_margins, resolve_messages};
 use crate::renderer::{render_contributors_hbs, render_template, style_block, wrap_block};
 use crate::repo::{resolve_repo_base, tag_url};
 use crate::timefmt::format_commit_datetime;
-use mdbook::book::Book;
-use mdbook::errors::Error;
-use mdbook::preprocess::{Preprocessor, PreprocessorContext};
+use mdbook_preprocessor::book::Book;
+use mdbook_preprocessor::errors::Error;
+use mdbook_preprocessor::{Preprocessor, PreprocessorContext};
 use std::{fs, path::PathBuf};
 
 pub struct GitInfo;
@@ -455,7 +455,7 @@ impl Preprocessor for GitInfo {
         Ok(book)
     }
 
-    fn supports_renderer(&self, renderer: &str) -> bool {
-        renderer == "html"
+    fn supports_renderer(&self, renderer: &str) -> Result<bool, Error> {
+        Ok(renderer == "html")
     }
 }

@@ -65,10 +65,10 @@ pub fn render_contributors_hbs(
     contributors_message: Option<&str>,
     usernames_visible: &[String],
     usernames_hidden: &[String],
-) -> Result<String, mdbook::errors::Error> {
+) -> Result<String, mdbook_preprocessor::errors::Error> {
     let mut hb = Handlebars::new();
     hb.register_template_string("contributors", CONTRIBUTORS_TEMPLATE)
-        .map_err(|e| mdbook::errors::Error::msg(format!("contributors template error: {e}")))?;
+        .map_err(|e| mdbook_preprocessor::errors::Error::msg(format!("contributors template error: {e}")))?;
 
     let hidden_count = usernames_hidden.len();
     let ctx = ContributorsCtx {
@@ -83,5 +83,5 @@ pub fn render_contributors_hbs(
     };
 
     hb.render("contributors", &ctx)
-        .map_err(|e| mdbook::errors::Error::msg(format!("contributors render error: {e}")))
+        .map_err(|e| mdbook_preprocessor::errors::Error::msg(format!("contributors render error: {e}")))
 }
