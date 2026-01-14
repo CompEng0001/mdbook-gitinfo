@@ -1,4 +1,4 @@
-use mdbook_preprocessor::book::{BookItem,Chapter};
+use mdbook_preprocessor::book::{BookItem, Chapter};
 
 pub fn decorate_chapters<F>(item: &mut BookItem, decorate: &F)
 where

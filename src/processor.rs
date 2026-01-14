@@ -1,8 +1,10 @@
 use crate::chapters::decorate_chapters;
-use crate::config::{load_config, ContributorsSource};
+use crate::config::{ContributorsSource, load_config};
 use crate::git;
 use crate::layout::{resolve_align, resolve_margins, resolve_messages};
-use crate::renderer::{GITINFO_CSS, render_contributors_hbs, render_template, style_block, wrap_block};
+use crate::renderer::{
+    GITINFO_CSS, render_contributors_hbs, render_template, style_block, wrap_block,
+};
 use crate::repo::{resolve_repo_base, tag_url};
 use crate::theme::ensure_gitinfo_assets;
 use crate::timefmt::format_commit_datetime;
@@ -99,7 +101,9 @@ fn replace_contributors_tokens(
                 let html = match source {
                     ContributorsSource::Inline => {
                         if args.is_empty() {
-                            eprintln!("[mdbook-gitinfo] Warning: contributors-source is 'inline' but no usernames provided in '{{% contributors %}}'");
+                            eprintln!(
+                                "[mdbook-gitinfo] Warning: contributors-source is 'inline' but no usernames provided in '{{% contributors %}}'"
+                            );
                             String::new()
                         } else {
                             inline_renderer(&args)
@@ -107,7 +111,9 @@ fn replace_contributors_tokens(
                     }
                     ContributorsSource::Git | ContributorsSource::File => {
                         if !args.is_empty() {
-                            eprintln!("[mdbook-gitinfo] Warning: inline contributors list ignored because contributors-source is not 'inline'");
+                            eprintln!(
+                                "[mdbook-gitinfo] Warning: inline contributors list ignored because contributors-source is not 'inline'"
+                            );
                         }
                         contributors_html_global.to_string()
                     }
@@ -127,7 +133,6 @@ fn replace_contributors_tokens(
 
     out
 }
-
 
 fn parse_contributors_file(path: &std::path::Path) -> Vec<String> {
     let Ok(raw) = fs::read_to_string(path) else {
@@ -250,13 +255,17 @@ impl Preprocessor for GitInfo {
                             ) {
                                 Ok(html) => Some(html),
                                 Err(e) => {
-                                    eprintln!("[mdbook-gitinfo] Warning: unable to render contributors template: {e}");
+                                    eprintln!(
+                                        "[mdbook-gitinfo] Warning: unable to render contributors template: {e}"
+                                    );
                                     Some(String::new())
                                 }
                             }
                         }
                         Err(e) => {
-                            eprintln!("[mdbook-gitinfo] Warning: unable to get contributors from git: {e}");
+                            eprintln!(
+                                "[mdbook-gitinfo] Warning: unable to get contributors from git: {e}"
+                            );
                             Some(String::new())
                         }
                     }
@@ -265,7 +274,10 @@ impl Preprocessor for GitInfo {
                     let file_path = ctx.root.join(&contributors_file);
                     let users = parse_contributors_file(&file_path);
                     if users.is_empty() {
-                        eprintln!("[mdbook-gitinfo] Warning: contributors-source is 'file' but no usernames found in {}", file_path.display());
+                        eprintln!(
+                            "[mdbook-gitinfo] Warning: contributors-source is 'file' but no usernames found in {}",
+                            file_path.display()
+                        );
                     }
                     eprintln!(
                         "[mdbook-gitinfo] contributors(file): path={} raw_lines={}",
@@ -301,7 +313,9 @@ impl Preprocessor for GitInfo {
                     ) {
                         Ok(html) => Some(html),
                         Err(e) => {
-                            eprintln!("[mdbook-gitinfo] Warning: unable to render contributors template: {e}");
+                            eprintln!(
+                                "[mdbook-gitinfo] Warning: unable to render contributors template: {e}"
+                            );
                             Some(String::new())
                         }
                     }
@@ -447,5 +461,94 @@ impl Preprocessor for GitInfo {
 
     fn supports_renderer(&self, renderer: &str) -> Result<bool, Error> {
         Ok(renderer == "html")
+    }
+}
+
+// [dev-dependencies]
+// tempfile = "3"
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    fn inline_renderer(args: &[String]) -> String {
+        format!(r#"<div class="R">{}</div>"#, args.join(","))
+    }
+
+    #[test]
+    fn token_replaced_only_when_standalone_line() {
+        let input = "before\n{% contributors alice bob %}\nafter\n";
+
+        let out =
+            replace_contributors_tokens(input, ContributorsSource::Inline, "", &inline_renderer);
+
+        assert!(out.contains(r#"<div class="R">alice,bob</div>"#));
+        assert!(out.contains("before"));
+        assert!(out.contains("after"));
+        assert!(!out.contains("{% contributors"));
+    }
+
+    #[test]
+    fn token_not_replaced_inside_fenced_code_block() {
+        let input = "```md\n{% contributors alice %}\n```\n";
+
+        let out =
+            replace_contributors_tokens(input, ContributorsSource::Inline, "", &inline_renderer);
+
+        assert!(out.contains("{% contributors alice %}"));
+        assert!(!out.contains(r#"<div class="R">"#));
+    }
+
+    #[test]
+    fn token_not_replaced_inside_indented_code_block() {
+        let input = "    {% contributors alice %}\n";
+
+        let out =
+            replace_contributors_tokens(input, ContributorsSource::Inline, "", &inline_renderer);
+
+        assert!(out.contains("{% contributors alice %}"));
+        assert!(!out.contains(r#"<div class="R">"#));
+    }
+
+    #[test]
+    fn token_not_replaced_inside_table_cell_or_inline_text() {
+        let input = "| Value | Desc |\n| --- | --- |\n| inline | token `{% contributors %}` |\n";
+
+        let out =
+            replace_contributors_tokens(input, ContributorsSource::Inline, "", &inline_renderer);
+
+        assert!(out.contains("`{% contributors %}`"));
+        assert!(!out.contains(r#"<div class="R">"#));
+    }
+
+    #[test]
+    fn git_or_file_source_uses_global_html_and_ignores_args() {
+        let input = "{% contributors alice bob %}\n";
+
+        let out = replace_contributors_tokens(
+            input,
+            ContributorsSource::Git,
+            r#"<div id="GLOBAL"></div>"#,
+            &inline_renderer,
+        );
+
+        assert!(out.contains(r#"<div id="GLOBAL"></div>"#));
+        assert!(!out.contains("alice"));
+        assert!(!out.contains(r#"<div class="R">"#));
+    }
+
+    #[test]
+    fn parse_contributors_file_accepts_bullets_and_strips_prefixes() {
+        let mut f = NamedTempFile::new().unwrap();
+        writeln!(f, "alice").unwrap();
+        writeln!(f, "- bob").unwrap();
+        writeln!(f, "* carol").unwrap();
+        writeln!(f, "").unwrap();
+        writeln!(f, "   ").unwrap();
+
+        let users = parse_contributors_file(f.path());
+
+        assert_eq!(users, vec!["alice", "bob", "carol"]);
     }
 }

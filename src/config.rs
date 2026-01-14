@@ -17,8 +17,8 @@
 //! branch      = "main"
 //! ```
 
-use mdbook_preprocessor::errors::Error;
 use mdbook_preprocessor::PreprocessorContext;
+use mdbook_preprocessor::errors::Error;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Default)]
@@ -226,28 +226,37 @@ pub struct GitInfoConfig {
 
 /// Load and deserialize the `[preprocessor.gitinfo]` table from `book.toml`.
 ///
+/// This function reads configuration values from the mdBook configuration
+/// tree and deserializes them into [`GitInfoConfig`].
+///
+/// If the `[preprocessor.gitinfo]` section is missing, default values are
+/// returned. Invalid configuration values result in an error.
+///
 /// # Arguments
 ///
-/// * `ctx` — The [`PreprocessorContext`] provided by `mdbook`, containing
-///   the configuration tree.
+/// * `ctx` — The [`PreprocessorContext`] provided by `mdbook-preprocessor`,
+///   containing the parsed `book.toml` configuration.
 ///
 /// # Errors
 ///
-/// Returns an [`Error`] if the section is missing or cannot be parsed.
+/// Returns an [`Error`] if the configuration section exists but cannot be
+/// deserialized into [`GitInfoConfig`].
 ///
 /// # Examples
 ///
 /// ```no_run
-/// use mdbook::preprocess::PreprocessorContext;
+/// use mdbook_preprocessor::PreprocessorContext;
 /// use mdbook_gitinfo::config::load_config;
 ///
-/// # fn example(ctx: &PreprocessorContext) -> Result<(), mdbook::errors::Error> {
-/// let cfg = load_config(ctx)?;
-/// if let Some(template) = cfg.template {
-///     println!("Using template: {}", template);
+/// fn example(ctx: &PreprocessorContext) -> Result<(), mdbook_preprocessor::errors::Error> {
+///     let cfg = load_config(ctx)?;
+///
+///     if let Some(template) = cfg.template {
+///         println!("Using template: {}", template);
+///     }
+///
+///     Ok(())
 /// }
-/// # Ok(())
-/// # }
 /// ```
 pub fn load_config(ctx: &PreprocessorContext) -> Result<GitInfoConfig, Error> {
     ctx.config
@@ -255,21 +264,21 @@ pub fn load_config(ctx: &PreprocessorContext) -> Result<GitInfoConfig, Error> {
         .ok_or_else(|| Error::msg("Missing or invalid [preprocessor.gitinfo] config"))
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mdbook_preprocessor::config::Config;
-    use toml;
+    use mdbook_preprocessor::{PreprocessorContext, config::Config};
+    use std::path::PathBuf;
 
-    fn ctx(toml: &str) -> mdbook_preprocessor::PreprocessorContext {
-        let parsed: toml::Value = toml::from_str(toml).unwrap();
+    fn ctx(toml_str: &str) -> PreprocessorContext {
+        let parsed: toml::Value = toml::from_str(toml_str).unwrap();
+
         let mut config = Config::default();
-        config.set("preprocessor.gitinfo", parsed);
-        mdbook_preprocessor::PreprocessorContext {
-            config,
-            ..Default::default()
-        }
+        // Config::set returns Result in mdBook 0.5.x
+        config.set("preprocessor.gitinfo", parsed).unwrap();
+
+        // PreprocessorContext is non_exhaustive; use constructor
+        PreprocessorContext::new(PathBuf::from("."), config, "html".to_string())
     }
 
     #[test]
@@ -289,6 +298,7 @@ mod tests {
             header = "left"
         "#))
         .unwrap();
+
         match c.align.unwrap() {
             AlignSetting::Split {
                 header,
@@ -311,6 +321,7 @@ mod tests {
             header = "H: {{date}}"
         "#))
         .unwrap();
+
         assert_eq!(c.message.unwrap().header.unwrap(), "H: {{date}}");
     }
 }

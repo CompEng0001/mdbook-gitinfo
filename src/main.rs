@@ -10,19 +10,21 @@ mod timefmt;
 
 pub use mdbook_gitinfo::{config, git};
 
-use clap::{arg, command, ArgMatches, Command};
+use clap::{ArgMatches, Command, arg, command};
 use mdbook_preprocessor::errors::Error;
-use mdbook_preprocessor::{parse_input, Preprocessor, MDBOOK_VERSION};
+use mdbook_preprocessor::{MDBOOK_VERSION, Preprocessor, parse_input};
 use processor::GitInfo;
 use std::{io, process};
 
 fn handle_preprocessing(pre: &dyn Preprocessor) -> Result<(), Error> {
     let (ctx, book) = parse_input(io::stdin())?;
 
-    if ctx.mdbook_version != MDBOOK_VERSION {   
+    if ctx.mdbook_version != MDBOOK_VERSION {
         eprintln!(
             "Warning: The '{}' plugin was built against version {} of mdbook, but we're being called from version {}",
-            pre.name(), MDBOOK_VERSION, ctx.mdbook_version
+            pre.name(),
+            MDBOOK_VERSION,
+            ctx.mdbook_version
         );
     }
 
