@@ -10,7 +10,9 @@ pub mod theme;
 
 #[doc(inline)]
 pub use config::GitInfoConfig;
+
 #[doc(inline)]
 pub use git::{get_git_output, verify_branch};
+
 #[doc(inline)]
 pub use theme::ensure_gitinfo_assets;

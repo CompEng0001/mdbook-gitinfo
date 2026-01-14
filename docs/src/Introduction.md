@@ -1,4 +1,4 @@
-# Welcome to mdbook-qitinfo
+# Welcome to mdbook-gitinfo
 
 <p align="center">
   <a href="https://crates.io/crates/mdbook-gitinfo">
@@ -15,12 +15,15 @@
   </a>
 </p>
 
-An <a href="https://github.com/rust-lang/mdBook">mdBook</a> preprocessor that injects Git metadata (commit hash, full hash, tag, date/time, branch) into each chapter — as a header, a footer, or both — with flexible templates, alignment, and CSS-style margins.
+An <a href="https://github.com/rust-lang/mdBook">mdBook</a> preprocessor that injects Git metadata (commit hash, full hash, tag, date/time, branch) into each chapter; as a header, a footer, or both, with flexible templates, alignment, and CSS-style margins.
 
-> [!WARNING]
-> Due to break in changes currently mdbook-gitinfo works with mdbook v0.4.52, **not** 0.5.0.
-> - [https://crates.io/crates/mdbook/0.4.52](https://crates.io/crates/mdbook/0.4.52)
-> - [https://github.com/rust-lang/mdBook/releases/tag/v0.4.52](https://github.com/rust-lang/mdBook/releases/tag/v0.4.52)
+
+## Compatibility 
+
+| mdbook-gitinfo version|mdbook versions|Notes|
+|:---------------:|:------------------:|----------------|
+| v2.\*.*|v0.5.* | Requires API changes introduced in mdbook 0.5.* |  
+| v1.\*.*|v0.4.* | Not compatible with 0.5.*+ |
 
 <br>
 
@@ -48,6 +51,7 @@ date-format = "%A %d %B %Y"
 time-format = "@ %H:%M:%S"
 branch = "main"
 hyperlink = true
+contributors = true
 ```
 
 {% contributors %}
