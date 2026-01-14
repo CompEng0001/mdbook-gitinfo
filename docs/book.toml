@@ -7,8 +7,8 @@ title = "mdbook-gitinfo"
 [output.html]
 git-repository-url = "https://github.com/compeng0001/mdbook-gitinfo"
 edit-url-template = "https://github.com//compeng0001/mdbook-gitinfo/edit/main/{path}"
-additional-css = ["theme/pagetoc.css"]
-additional-js  = ["theme/pagetoc.js"]
+additional-css = ["theme/gitinfo.css"]
+
 
 [output.html.print]
 enable = false
@@ -30,6 +30,4 @@ date-format = "%A %d %B %Y"
 time-format = "@ %H:%M:%S"
 branch = "main"
 hyperlink = true
-
-[preprocessor.alerts]
-enable = true
+contributors = true

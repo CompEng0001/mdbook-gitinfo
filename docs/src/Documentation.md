@@ -13,7 +13,7 @@ Both styles merge as expected, but using one style consistently improves readabi
 | `footer`    | `bool`   | `true`   | Render metadata at the bottom of each page.                                          |
 | `branch`    | `string` | `"main"` | Branch to query for commit data.                                                     |
 | `hyperlink` | `bool`   | `false`  | Turns commit hash and branch into clickable links (see [Hyperlinks](#4-hyperlinks)). |
-| `contributors` |`bool` | `false`  | Renders Contributors section (see [Contributors](#6-contributors)).
+| `contributors` |`bool` | `false`  | Renders Contributors section (see [Contributors](#6-contributors)).                  |
 
 
 ## 2. Message Templates
@@ -204,6 +204,7 @@ Controls how commit timestamps are rendered.
 
 Optionally render a contributors block, showing GitHub avatars and profile links for users associated with the book.
 
+
 This feature is **opt-in** and disabled by default.
 
 ```toml
@@ -216,6 +217,12 @@ Contributors are rendered wherever the token appears:
 ```md
 {% contributors %}
 ```
+
+> [!NOTE]
+> Internally, mdbook-gitinfo generates a small CSS file, `gitinfo.css` inside the book’s
+> theme override directory and registers it with mdBook, `[output.html.additional-css]`.
+> Advanced users may override or extend these styles using their own theme CSS.
+
 
 ### 6.1 Contributor Sources
 The source of contributor data is controlled via `contributors-source`.
@@ -265,7 +272,7 @@ The author name is treated as a GitHub username and used to construct:
 Inline usernames are ignored in this mode:
 
 ```md
-{% contributors alice bob %}
+{% contributors author1 authorN %}
 ```
 
 A warning is emitted if arguments are provided.

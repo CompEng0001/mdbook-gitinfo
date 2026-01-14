@@ -1,35 +1,4 @@
-<div class="student-contributor-footnotes">
-<style>
-/* Make details/hidden avatars participate in the SAME flex wrap */
-.student-contributor-footnotes .contributors-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; max-width: 100%; align-items: center; }
-.student-contributor-footnotes details.contributors-more { display: contents; }
-
-/* Hide the hidden avatars when not expanded */
-.student-contributor-footnotes details.contributors-more:not([open]) .contributors-hidden { display: none; }
-/* When expanded, "unwrap" the hidden wrapper so its children become flex items */
-.student-contributor-footnotes details.contributors-more[open] .contributors-hidden { display: contents; }
-
-/* Make the summary look like a subtle "more" chip (no default marker) */
-.student-contributor-footnotes details.contributors-more > summary {
-  list-style: none;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-}
-.student-contributor-footnotes details.contributors-more > summary::-webkit-details-marker { display: none; }
-.student-contributor-footnotes .contributors-more-chip {
-  display: inline-flex;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 1px solid #ddd;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  line-height: 1;
-  user-select: none;
-}
-</style>
+<div class="contributor-footnotes">
 
 <h2>{{title}}</h2>
 

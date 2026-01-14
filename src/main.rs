@@ -5,23 +5,26 @@ mod layout;
 mod processor;
 mod renderer;
 mod repo;
+mod theme;
 mod timefmt;
 
 pub use mdbook_gitinfo::{config, git};
 
-use clap::{arg, command, ArgMatches, Command};
-use mdbook::errors::Error;
-use mdbook::preprocess::{CmdPreprocessor, Preprocessor};
+use clap::{ArgMatches, Command, arg, command};
+use mdbook_preprocessor::errors::Error;
+use mdbook_preprocessor::{MDBOOK_VERSION, Preprocessor, parse_input};
 use processor::GitInfo;
 use std::{io, process};
 
 fn handle_preprocessing(pre: &dyn Preprocessor) -> Result<(), Error> {
-    let (ctx, book) = CmdPreprocessor::parse_input(io::stdin())?;
+    let (ctx, book) = parse_input(io::stdin())?;
 
-    if ctx.mdbook_version != mdbook::MDBOOK_VERSION {
+    if ctx.mdbook_version != MDBOOK_VERSION {
         eprintln!(
             "Warning: The '{}' plugin was built against version {} of mdbook, but we're being called from version {}",
-            pre.name(), mdbook::MDBOOK_VERSION, ctx.mdbook_version
+            pre.name(),
+            MDBOOK_VERSION,
+            ctx.mdbook_version
         );
     }
 
@@ -34,11 +37,14 @@ fn handle_supports(pre: &dyn Preprocessor, sub_args: &ArgMatches) -> ! {
     let renderer = sub_args
         .get_one::<String>("renderer")
         .expect("Renderer required");
-    process::exit(if pre.supports_renderer(renderer) {
-        0
-    } else {
-        1
-    });
+    let ok = match pre.supports_renderer(renderer) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("{e}");
+            false
+        }
+    };
+    process::exit(if ok { 0 } else { 1 });
 }
 
 fn main() {

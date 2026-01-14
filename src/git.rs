@@ -10,7 +10,7 @@
 //! - [`get_git_output`] — Run arbitrary Git commands and capture output.
 //! - [`verify_branch`] — Convenience wrapper to check branch existence.
 
-use mdbook::errors::Error;
+use mdbook_preprocessor::errors::Error;
 use std::collections::BTreeSet;
 use std::ffi::OsStr;
 use std::path::Path;
