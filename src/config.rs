@@ -260,12 +260,13 @@ pub fn load_config(ctx: &PreprocessorContext) -> Result<GitInfoConfig, Error> {
 mod tests {
     use super::*;
     use mdbook_preprocessor::config::Config;
+    use toml;
 
-    fn ctx(toml: &str) -> mdbook::preprocess::PreprocessorContext {
+    fn ctx(toml: &str) -> mdbook_preprocessor::PreprocessorContext {
         let parsed: toml::Value = toml::from_str(toml).unwrap();
         let mut config = Config::default();
         config.set("preprocessor.gitinfo", parsed);
-        mdbook::preprocess::PreprocessorContext {
+        mdbook_preprocessor::PreprocessorContext {
             config,
             ..Default::default()
         }

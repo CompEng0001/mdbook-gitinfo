@@ -2,8 +2,9 @@ use crate::chapters::decorate_chapters;
 use crate::config::{load_config, ContributorsSource};
 use crate::git;
 use crate::layout::{resolve_align, resolve_margins, resolve_messages};
-use crate::renderer::{render_contributors_hbs, render_template, style_block, wrap_block};
+use crate::renderer::{GITINFO_CSS, render_contributors_hbs, render_template, style_block, wrap_block};
 use crate::repo::{resolve_repo_base, tag_url};
+use crate::theme::ensure_gitinfo_assets;
 use crate::timefmt::format_commit_datetime;
 use mdbook_preprocessor::book::Book;
 use mdbook_preprocessor::errors::Error;
@@ -32,20 +33,17 @@ fn replace_contributors_tokens(
 ) -> String {
     let mut out = String::with_capacity(input.len());
 
-    // fence tracking: None = not in a fenced block
+    // fenced code tracking
     let mut in_fence = false;
     let mut fence_ch: char = '\0'; // '`' or '~'
     let mut fence_len: usize = 0;
 
-    // Iterate line-by-line (preserving newlines) so we can reliably skip fenced regions.
     for line in input.split_inclusive('\n') {
-        // Detect fence open/close (CommonMark allows up to 3 leading spaces; tolerate tabs too)
+        // Detect fenced blocks (``` or ~~~), allowing leading spaces/tabs
         let trimmed = line.trim_start_matches(|c| c == ' ' || c == '\t');
 
         if !trimmed.is_empty() {
             let first = trimmed.chars().next().unwrap();
-
-            // Count consecutive backticks/tildes at start of trimmed line
             if first == '`' || first == '~' {
                 let mut count = 0usize;
                 for c in trimmed.chars() {
@@ -55,17 +53,14 @@ fn replace_contributors_tokens(
                         break;
                     }
                 }
-
                 if count >= 3 {
                     if !in_fence {
-                        // Opening a fence
                         in_fence = true;
                         fence_ch = first;
                         fence_len = count;
                         out.push_str(line);
                         continue;
                     } else if first == fence_ch && count >= fence_len {
-                        // Closing the current fence (must match char, length >= opening)
                         in_fence = false;
                         fence_ch = '\0';
                         fence_len = 0;
@@ -82,65 +77,57 @@ fn replace_contributors_tokens(
             continue;
         }
 
-        // Outside fences: run your existing token replacement logic on this line.
-        let mut i = 0usize;
+        // Skip indented code blocks (CommonMark): lines beginning with 4 spaces or a tab.
+        if line.starts_with('\t') || line.starts_with("    ") {
+            out.push_str(line);
+            continue;
+        }
 
-        while i < line.len() {
-            // Find "{%"
-            let Some(rel_start) = line[i..].find("{%") else {
-                out.push_str(&line[i..]);
-                break;
-            };
-            let start = i + rel_start;
-            out.push_str(&line[i..start]);
+        // Only replace when the token is the entire (trimmed) line.
+        // This prevents replacement inside tables, inline code, or prose.
+        let t = line.trim();
+        if t.starts_with("{%") && t.ends_with("%}") {
+            let inner = t.trim_start_matches("{%").trim_end_matches("%}").trim();
+            if inner.starts_with("contributors") {
+                let mut parts = inner.split_whitespace();
+                let _kw = parts.next();
+                let args: Vec<String> = parts
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
 
-            // Find closing "%}"
-            let Some(end_rel) = line[start..].find("%}") else {
-                out.push_str(&line[start..]);
-                break;
-            };
-            let end = start + end_rel + 2;
+                let html = match source {
+                    ContributorsSource::Inline => {
+                        if args.is_empty() {
+                            eprintln!("[mdbook-gitinfo] Warning: contributors-source is 'inline' but no usernames provided in '{{% contributors %}}'");
+                            String::new()
+                        } else {
+                            inline_renderer(&args)
+                        }
+                    }
+                    ContributorsSource::Git | ContributorsSource::File => {
+                        if !args.is_empty() {
+                            eprintln!("[mdbook-gitinfo] Warning: inline contributors list ignored because contributors-source is not 'inline'");
+                        }
+                        contributors_html_global.to_string()
+                    }
+                };
 
-            let token_body = &line[start + 2..end - 2];
-            let token = token_body.trim();
-
-            if !token.starts_with("contributors") {
-                out.push_str(&line[start..end]);
-                i = end;
+                // Emit as a raw HTML block with blank lines around it
+                out.push_str("\n");
+                out.push_str(html.trim());
+                out.push_str("\n\n");
                 continue;
             }
-
-            let mut parts = token.split_whitespace();
-            let _kw = parts.next();
-            let args: Vec<String> = parts
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect();
-
-            match source {
-                ContributorsSource::Inline => {
-                    if args.is_empty() {
-                        eprintln!("[mdbook-gitinfo] Warning: contributors-source is 'inline' but no usernames provided in '{{% contributors %}}'");
-                        // render nothing
-                    } else {
-                        let html = inline_renderer(&args);
-                        out.push_str(html.trim_start());
-                    }
-                }
-                ContributorsSource::Git | ContributorsSource::File => {
-                    if !args.is_empty() {
-                        eprintln!("[mdbook-gitinfo] Warning: inline contributors list ignored because contributors-source is not 'inline'");
-                    }
-                    out.push_str(contributors_html_global.trim_start());
-                }
-            }
-
-            i = end;
         }
+
+        // Default: unchanged
+        out.push_str(line);
     }
 
     out
 }
+
 
 fn parse_contributors_file(path: &std::path::Path) -> Vec<String> {
     let Ok(raw) = fs::read_to_string(path) else {
@@ -175,7 +162,10 @@ impl Preprocessor for GitInfo {
             .contributors_file
             .clone()
             .unwrap_or_else(|| "CONTRIBUTORS.md".to_string());
-
+        // Generate assets and update book.toml once per run (no per-chapter side effects)
+        if contributors_enabled {
+            ensure_gitinfo_assets(ctx, GITINFO_CSS);
+        }
         let contributors_title = cfg
             .contributors_title
             .as_deref()

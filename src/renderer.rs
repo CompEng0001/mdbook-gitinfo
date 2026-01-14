@@ -2,6 +2,7 @@ use handlebars::Handlebars;
 use serde::Serialize;
 
 const CONTRIBUTORS_TEMPLATE: &str = include_str!("../templates/contributor.hbs");
+pub const GITINFO_CSS: &str = include_str!("../templates/gitinfo.css");
 
 #[derive(Serialize)]
 struct ContributorsCtx<'a> {

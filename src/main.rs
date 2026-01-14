@@ -5,6 +5,7 @@ mod layout;
 mod processor;
 mod renderer;
 mod repo;
+mod theme;
 mod timefmt;
 
 pub use mdbook_gitinfo::{config, git};
