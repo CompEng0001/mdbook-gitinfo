@@ -19,9 +19,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up mdbook (v0.4.52)
+      - name: Set up mdbook (v0.5.2)
         run: | 
-          curl -sSL https://github.com/rust-lang/mdBook/releases/download/v0.4.52/mdbook-v0.4.52-x86_64-unknown-linux-gnu.tar.gz | tar -xz
+          curl -sSL https://github.com/rust-lang/mdBook/releases/download/v0.5.2/mdbook-v0.5.2-x86_64-unknown-linux-gnu.tar.gz | tar -xz
           chmod +x mdbook
           mv mdbook ~/.cargo/bin/mdbook
   
@@ -31,18 +31,10 @@ jobs:
           tar -xzf mdbook-gitinfo-linux.tar.gz
           mv mdbook-gitinfo-linux ~/.cargo/bin/mdbook-gitinfo
 
-      - name: Install mdbook-alerts (v.0.8.0)
-        run: |
-          curl -fsSLO https://github.com/lambdalisue/rs-mdbook-alerts/releases/download/v0.8.0/mdbook-alerts-x86_64-unknown-linux-gnu
-          mv mdbook-alerts-x86_64-unknown-linux-gnu ~/.cargo/bin/mdbook-alerts
-          chmod 700 ~/.cargo/bin/mdbook-alerts
-
       - name: Show mdbook version
         run: mdbook --version
       - name: Show gitinfo version
         run: mdbook-gitinfo --version
-      - name: Show alerts version
-        run: mdbook-alerts --version
 
       - run: mdbook build docs
 
