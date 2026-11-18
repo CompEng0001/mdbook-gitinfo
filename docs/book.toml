@@ -7,7 +7,8 @@ title = "mdbook-gitinfo"
 [output.html]
 git-repository-url = "https://github.com/compeng0001/mdbook-gitinfo"
 edit-url-template = "https://github.com//compeng0001/mdbook-gitinfo/edit/main/{path}"
-additional-css = ["theme/gitinfo.css"]
+additional-css = ["theme/css/gitinfo.css", "theme/css/mdbook-components-devicon.css", "theme/css/mdbook-components.css", "theme/gitinfo.css"]
+additional-js = ["theme/js/mdbook-components-icons.js", "theme/js/mdbook-components.js"]
 
 [output.html.print]
 enable = false
@@ -30,3 +31,7 @@ time-format = "@ %H:%M:%S"
 branch = "main"
 hyperlink = true
 contributors = true
+contributor-file = "CONTRIBUTORS.md"
+
+[preprocessor.components]
+renderers = ["html"]

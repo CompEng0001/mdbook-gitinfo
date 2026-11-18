@@ -35,22 +35,24 @@ Precedence (per placement):
 > [!IMPORTANT]
 > If a placement-specific template is set (`message.header` or `message.footer`), `message.both` is ignored <em>for that placement</em>.
 
-**Example Dotted keys:**
+::: tabs
+::: tab label="Example Dotted keys" icon=toml
 ```toml
 [preprocessor.gitinfo]
 message.header = "Last updated: <em>{{date}}</em>"
 message.footer = "branch: {{branch}}{{sep}}commit: {{hash}}"
 message.both   = "<em>{{date}}</em>{{sep}}branch: {{branch}}"
 ```
-
-**Example Table form:**
+:::
+::: tab label="Example Table form" icon=toml
 ```toml
 [preprocessor.gitinfo.message]
 header = "Last updated: <em>{{date}}</em>"
 footer = "branch: {{branch}}{{sep}}commit: {{hash}}"
 both   = "<em>{{date}}</em>{{sep}}branch: {{branch}}"
 ```
-
+:::
+:::
 
 ## 3. Formatting and Layout
 ### 3.1 Font Size
@@ -88,21 +90,24 @@ Default: `"center"` for both header and footer.
 > [!IMPORTANT]
 > If a alignment-specific template is set (`align.header` or `align.footer`), `align.both` is ignored <em>for that alignment</em>.
 
-**Dotted keys:**
+::: tabs
+::: tab label="Dotted keys" icon=toml
 ```toml
 [preprocessor.gitinfo]
 align.header = "left"
 align.footer = "right"
 align.both   = "center"
 ```
-
-**Table form (equivalent):**
+:::
+::: tab label="Table form (equivalent)" icon=toml
 ```toml
 [preprocessor.gitinfo.align]
 both   = "center"
 header = "left"
 footer = "right"
 ```
+:::
+:::
 
 ### 3.5 Margin (TRBL)
 
@@ -122,29 +127,32 @@ Defaults:
 
 - Footer → `["2em", "0", "0", "0"]`
 
-**Example Dotted keys (array shorthand):**
+::: tabs
+::: tab label="Dotted keys (array shorthand)" icon=toml
 ```toml
 [preprocessor.gitinfo]
 margin.header = ["0", "0", "1.25em", "0"]
 margin.footer = ["2em", "0", "0", "0"]   
 margin.both   = "1em"                    
 ```
-
-**Example Dotted keys (named sides):**
+:::
+::: tab label="Dotted keys (named sides)" icon=toml
 ```toml
 [preprocessor.gitinfo]
 margin.header.top     = "5em"
 margin.footer.bottom  = "2em"
 margin.both.left      = "0.5em"
 ```
-
-**Example Table form (equivalent):**
+:::
+::: tab label="Table (equivalent)" icon=toml
 ```toml
 [preprocessor.gitinfo.margin]
 both   = ["1em"]                  
 header = ["0", "0", "1.25em", "0"]
 footer = { top = "2em" }          
 ```
+:::
+:::
 
 ## 4. Hyperlinks
 
@@ -334,7 +342,7 @@ The file may contain one GitHub username per line, optionally prefixed by
 # Contributors
 
 - CompEng0001
-- max-deadman
+- ocotocat
 ```
 
 If the configured file is missing or unreadable, the build reports an error
@@ -412,7 +420,8 @@ This is useful for filtering automation accounts or CI bots.
 
 ## 7. Examples
 
-### Example 1 – Simple Footer
+::: tabs
+::: tab label="Simple Footer" icon=toml
 
 ```toml
 [preprocessor.gitinfo]
@@ -421,8 +430,8 @@ footer = true
 message.footer = "Updated {{date}} {{sep}} {{hash}}"
 align.footer = "center"
 ```
-
-### Example 2 – Header + Footer with Margins
+:::
+::: tab label="Header + Footer with Margins" icon=toml
 
 ```toml
 [preprocessor.gitinfo]
@@ -446,3 +455,5 @@ footer = "right"
 header = { top = "2em", bottom = "1em" }
 footer = ["2em", "0", "0", "0"]
 ```
+:::
+:::

@@ -52,6 +52,7 @@ time-format = "@ %H:%M:%S"
 branch = "main"
 hyperlink = true
 contributors = true
+contributor-file = "../CONTRIBUTORS.md"
 ```
 
 {% contributors %}

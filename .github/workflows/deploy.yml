@@ -31,10 +31,19 @@ jobs:
           tar -xzf mdbook-gitinfo-linux.tar.gz
           mv mdbook-gitinfo-linux ~/.cargo/bin/mdbook-gitinfo
 
+      - name: Install mdbook-components (0.2.2)
+        run: |
+          curl -fsSLO https://github.com/CompEng0001/mdbook-components/releases/download/v0.2.2/mdbook-components-linux.tar.gz
+          tar -xzf mdbook-components-linux.tar.gz
+
+          mv mdbook-components-linux ~/.cargo/bin/mdbook-components
+
       - name: Show mdbook version
         run: mdbook --version
       - name: Show gitinfo version
         run: mdbook-gitinfo --version
+      - name: Show components version
+        run: mdbook-components --version
 
       - run: mdbook build docs
 
