@@ -1,0 +1,47 @@
+/* mdbook-gitinfo: contributors block */
+.contributor-footnotes { margin-top: 1.25rem; }
+
+.contributor-footnotes .contributors-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+  max-width: 100%;
+  align-items: center;
+}
+
+.contributor-footnotes details.contributors-more { display: contents; }
+
+.contributor-footnotes details.contributors-more:not([open]) .contributors-hidden {
+  display: none;
+}
+
+.contributor-footnotes details.contributors-more[open] .contributors-hidden {
+  display: contents;
+}
+
+.contributor-footnotes details.contributors-more > summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.contributor-footnotes details.contributors-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.contributor-footnotes .contributors-more-chip {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid #ddd;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  line-height: 1;
+  user-select: none;
+}
+
+.contributor-footnotes img { border-radius: 50%; display: block; }
