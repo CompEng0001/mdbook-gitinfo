@@ -11,7 +11,7 @@ use crate::timefmt::format_commit_datetime;
 use mdbook_preprocessor::book::Book;
 use mdbook_preprocessor::errors::Error;
 use mdbook_preprocessor::{Preprocessor, PreprocessorContext};
-use std::{fs, path::PathBuf};
+use std::{fs, path::{Path, PathBuf}};
 
 pub struct GitInfo;
 
@@ -134,20 +134,32 @@ fn replace_contributors_tokens(
     out
 }
 
-fn parse_contributors_file(path: &std::path::Path) -> Vec<String> {
-    let Ok(raw) = fs::read_to_string(path) else {
-        return vec![];
-    };
-    raw.lines()
+fn parse_contributors_file(path: &Path) -> Result<Vec<String>, Error> {
+    let raw = fs::read_to_string(path).map_err(|e| {
+        Error::msg(format!("unable to read contributor file {}: {e}", path.display()))
+    })?;
+    Ok(raw.lines()
         .map(|l| l.trim())
-        .filter(|l| !l.is_empty())
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
         .map(|l| {
             l.strip_prefix("- ")
                 .or_else(|| l.strip_prefix("* "))
                 .unwrap_or(l)
         })
-        .map(|l| l.trim().to_string())
-        .collect()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(str::to_string)
+        .collect())
+}
+
+fn resolve_contributor_path(book_root: &Path, configured: &str) -> Result<PathBuf, Error> {
+    let path = Path::new(configured);
+    if path.is_absolute() {
+        return Ok(path.to_path_buf());
+    }
+    let repo_root = git::get_git_output(["rev-parse", "--show-toplevel"], book_root)
+        .map_err(|e| Error::msg(format!("unable to locate Git repository for contributor-file: {e}")))?;
+    Ok(Path::new(&repo_root).join(path))
 }
 
 impl Preprocessor for GitInfo {
@@ -162,11 +174,22 @@ impl Preprocessor for GitInfo {
         }
 
         let contributors_enabled = cfg.contributors.unwrap_or(false);
-        let contributors_source = cfg.contributors_source.unwrap_or_default();
+        let contributors_source = if cfg.contributor_file.is_some() {
+            ContributorsSource::File
+        } else {
+            cfg.contributors_source.unwrap_or_default()
+        };
         let contributors_file = cfg
-            .contributors_file
+            .contributor_file
             .clone()
+            .or(cfg.contributors_file.clone())
             .unwrap_or_else(|| "CONTRIBUTORS.md".to_string());
+        let file_contributors = if contributors_enabled && matches!(contributors_source, ContributorsSource::File) {
+            let file_path = resolve_contributor_path(&ctx.root, &contributors_file)?;
+            Some((file_path.clone(), parse_contributors_file(&file_path)?))
+        } else {
+            None
+        };
         // Generate assets and update book.toml once per run (no per-chapter side effects)
         if contributors_enabled {
             ensure_gitinfo_assets(ctx, GITINFO_CSS);
@@ -271,8 +294,7 @@ impl Preprocessor for GitInfo {
                     }
                 }
                 ContributorsSource::File => {
-                    let file_path = ctx.root.join(&contributors_file);
-                    let users = parse_contributors_file(&file_path);
+                    let (file_path, users) = file_contributors.as_ref().expect("file contributors loaded");
                     if users.is_empty() {
                         eprintln!(
                             "[mdbook-gitinfo] Warning: contributors-source is 'file' but no usernames found in {}",
@@ -285,7 +307,8 @@ impl Preprocessor for GitInfo {
                         users.len(),
                     );
                     let filtered: Vec<String> = users
-                        .into_iter()
+                        .iter()
+                        .cloned()
                         .filter(|u| !excluded_contributors.contains(u))
                         .collect();
 
@@ -547,8 +570,42 @@ mod tests {
         writeln!(f, "").unwrap();
         writeln!(f, "   ").unwrap();
 
-        let users = parse_contributors_file(f.path());
+        let users = parse_contributors_file(f.path()).unwrap();
 
         assert_eq!(users, vec!["alice", "bob", "carol"]);
+    }
+
+    #[test]
+    fn contributor_file_ignores_markdown_heading() {
+        let mut f = NamedTempFile::new().unwrap();
+        writeln!(f, "# Contributors\n\n- max-deadman\nCompEng0001").unwrap();
+        assert_eq!(
+            parse_contributors_file(f.path()).unwrap(),
+            vec!["max-deadman", "CompEng0001"]
+        );
+    }
+
+    #[test]
+    fn contributor_file_missing_returns_error() {
+        let folder = tempfile::tempdir().unwrap();
+        assert!(parse_contributors_file(&folder.path().join("missing.md")).is_err());
+    }
+
+    #[test]
+    fn contributor_file_path_is_relative_to_repository_root() {
+        let folder = tempfile::tempdir().unwrap();
+        let repo = folder.path();
+        let status = std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(repo)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let book = repo.join("docs");
+        std::fs::create_dir(&book).unwrap();
+        assert_eq!(
+            resolve_contributor_path(&book, "CONTRIBUTORS.md").unwrap(),
+            repo.join("CONTRIBUTORS.md")
+        );
     }
 }

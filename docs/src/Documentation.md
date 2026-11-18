@@ -14,6 +14,7 @@ Both styles merge as expected, but using one style consistently improves readabi
 | `branch`    | `string` | `"main"` | Branch to query for commit data.                                                     |
 | `hyperlink` | `bool`   | `false`  | Turns commit hash and branch into clickable links (see [Hyperlinks](#4-hyperlinks)). |
 | `contributors` |`bool` | `false`  | Renders Contributors section (see [Contributors](#6-contributors)).                  |
+| `contributor-file` | `string` | *(unset)* | Optional repository-root-relative Markdown file of GitHub usernames; overrides Git shortlog and `contributors-source`. |
 
 
 ## 2. Message Templates
@@ -280,7 +281,7 @@ A warning is emitted if arguments are provided.
 ### 6.3 `contributors-source = "file"`
 
 Contributors are read from a file located at the repository root
-(the same level as `book.toml` or `README.md`).
+(which may be above the directory containing `book.toml`).
 
 ```toml
 [preprocessor.gitinfo]
@@ -314,6 +315,31 @@ Bullet prefixes are also accepted:
 ```
 
 Blank lines are ignored.
+
+**Simpler override (recommended):** Set `contributor-file` without changing
+`contributors-source`. This automatically uses the specified file instead of
+`git shortlog`. Relative paths are resolved from the Git repository root,
+even if `book.toml` is in a subdirectory. Absolute paths are also supported.
+
+```toml
+[preprocessor.gitinfo]
+contributors = true
+contributor-file = "CONTRIBUTORS.md"
+```
+
+The file may contain one GitHub username per line, optionally prefixed by
+`- ` or `* `, with blank lines and Markdown headings ignored:
+
+```markdown
+# Contributors
+
+- CompEng0001
+- max-deadman
+```
+
+If the configured file is missing or unreadable, the build reports an error
+instead of silently falling back to Git history. Other contributor display
+options (title, message, exclusions and maximum visible) still apply.
 
 ### 6.4 `contributors-source = "inline"`
 

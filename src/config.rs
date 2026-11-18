@@ -204,7 +204,14 @@ pub struct GitInfoConfig {
     #[serde(rename = "contributors-source")]
     pub contributors_source: Option<ContributorsSource>,
 
-    /// File path (relative to book root) used when contributors-source = "file".
+    /// Optional path to a Markdown file containing one GitHub username per line.
+    /// Relative paths are resolved from the Git repository root. When set,
+    /// this overrides contributors-source (including Git shortlog).
+    #[serde(rename = "contributor-file")]
+    pub contributor_file: Option<String>,
+
+    /// Legacy file path used when contributors-source = "file".
+    /// Relative paths are resolved from the Git repository root.
     /// Default: "CONTRIBUTORS.md"
     #[serde(rename = "contributors-file")]
     pub contributors_file: Option<String>,
